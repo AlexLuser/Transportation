@@ -1,0 +1,9 @@
+{
+  "realName": "李四",
+  "phone": "13900139000",
+  "email": "lisi@example.com",
+  "gender": 1,
+  "birthday": "1992-08-20",
+  "avatar": "https://example.com/avatar/lisi.jpg"
+}
+

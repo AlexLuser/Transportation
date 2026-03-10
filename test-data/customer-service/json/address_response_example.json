@@ -1,0 +1,20 @@
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "customerId": 1,
+    "receiverName": "张三",
+    "receiverPhone": "13800138000",
+    "province": "北京市",
+    "city": "北京市",
+    "district": "朝阳区",
+    "detailAddress": "朝阳区建国路88号SOHO现代城A座1001室",
+    "postalCode": "100025",
+    "isDefault": 1,
+    "createTime": "2024-01-01T10:00:00",
+    "updateTime": "2024-01-01T10:00:00"
+  },
+  "timestamp": 1234567890
+}
+

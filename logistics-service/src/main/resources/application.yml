@@ -1,0 +1,48 @@
+server:
+  port: 8087  # 物流服务端口
+
+spring:
+  application:
+    name: logistics-service  # 服务名称（用于Nacos注册）
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848  # Nacos地址
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: admin
+    password: 12345678
+
+# MyBatis Plus配置
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+
+# OpenFeign配置
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 10000
+
+# ============================================================
+# 大模型（LLM）配置
+# 支持任何兼容 OpenAI Chat Completions API 的服务
+# ============================================================
+llm:
+  enabled: false          # 开发阶段设为 false，避免未配置 key 报错；正式接入时改为 true
+  base-url: https://api.siliconflow.cn   # 示例：Ollama 本地: http://localhost:11434
+  api-key: sk-fqchgediptfzgbdhsypodatoterxsxkwhkxkuyiobpnnzskx          # 从环境变量读取，保护密钥不进代码库
+  model: Qwen/Qwen2.5-7B-Instruct                # 可换成 qwen-turbo / deepseek-chat / llama3 等
+  timeout-seconds: 30
+  max-tokens: 1024
+  temperature: 0.3       # 较低温度保证输出格式稳定（JSON 解析友好）
+  json-mode-enabled: true  # false=关闭 response_format，Ollama 本地模型需设为 false
+  eta-update-interval: 10  # 每上报 10 次 GPS 触发一次 LLM ETA 重算
+

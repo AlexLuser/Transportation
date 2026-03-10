@@ -1,0 +1,43 @@
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": [
+    {
+      "id": 1,
+      "shopId": 1,
+      "categoryId": 3,
+      "productName": "优质坚果礼盒",
+      "productCode": "SP001",
+      "description": "精选优质坚果，包含核桃、杏仁、腰果等",
+      "price": 128.00,
+      "originalPrice": 158.00,
+      "unit": "盒",
+      "weight": 1.5,
+      "images": "[\"https://example.com/images/nut1.jpg\", \"https://example.com/images/nut2.jpg\"]",
+      "status": 1,
+      "salesCount": 25,
+      "createTime": "2024-03-07T10:00:00",
+      "updateTime": "2024-03-07T10:00:00"
+    },
+    {
+      "id": 2,
+      "shopId": 1,
+      "categoryId": 4,
+      "productName": "有机果汁",
+      "productCode": "SP002",
+      "description": "100%纯天然有机果汁，无添加",
+      "price": 35.00,
+      "originalPrice": 45.00,
+      "unit": "瓶",
+      "weight": 0.5,
+      "images": "[\"https://example.com/images/juice1.jpg\"]",
+      "status": 1,
+      "salesCount": 50,
+      "createTime": "2024-03-07T10:00:00",
+      "updateTime": "2024-03-07T10:00:00"
+    }
+  ],
+  "timestamp": "2024-03-07T10:00:00"
+}
+
+

@@ -1,0 +1,51 @@
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": [
+    {
+      "id": 1,
+      "warehouseName": "北京中央仓库",
+      "warehousePhone": "010-12345678",
+      "province": "北京市",
+      "city": "北京市",
+      "district": "朝阳区",
+      "detailAddress": "朝阳区物流园区A区1号",
+      "postalCode": "100020",
+      "capacity": 10000,
+      "status": 1,
+      "createTime": "2024-03-07T10:00:00",
+      "updateTime": "2024-03-07T10:00:00"
+    },
+    {
+      "id": 2,
+      "warehouseName": "上海华东仓库",
+      "warehousePhone": "021-87654321",
+      "province": "上海市",
+      "city": "上海市",
+      "district": "浦东新区",
+      "detailAddress": "浦东新区物流园区B区2号",
+      "postalCode": "200135",
+      "capacity": 8000,
+      "status": 1,
+      "createTime": "2024-03-07T10:00:00",
+      "updateTime": "2024-03-07T10:00:00"
+    },
+    {
+      "id": 3,
+      "warehouseName": "广州华南仓库",
+      "warehousePhone": "020-11223344",
+      "province": "广东省",
+      "city": "广州市",
+      "district": "白云区",
+      "detailAddress": "白云区物流园区C区3号",
+      "postalCode": "510440",
+      "capacity": 6000,
+      "status": 1,
+      "createTime": "2024-03-07T10:00:00",
+      "updateTime": "2024-03-07T10:00:00"
+    }
+  ],
+  "timestamp": "2024-03-07T10:00:00"
+}
+
+

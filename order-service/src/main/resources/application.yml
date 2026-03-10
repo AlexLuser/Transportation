@@ -1,0 +1,27 @@
+server:
+  port: 8086  # 订单服务端口
+
+spring:
+  application:
+    name: order-service  # 服务名称（用于Nacos注册）
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848  # Nacos地址
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: admin  # MySQL用户名
+    password: 12345678  # MySQL密码
+
+# MyBatis Plus配置
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true  # 驼峰命名转换
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl  # 打印SQL（开发环境）
+  global-config:
+    db-config:
+      id-type: auto  # 主键自增
+
+
+

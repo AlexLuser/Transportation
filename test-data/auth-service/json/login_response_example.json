@@ -1,0 +1,16 @@
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "userInfo": {
+      "userId": 1,
+      "username": "admin",
+      "roleCode": "admin",
+      "roleName": "管理员"
+    },
+    "expiresIn": 7200
+  },
+  "timestamp": 1234567890
+}
+

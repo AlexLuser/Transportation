@@ -1,0 +1,19 @@
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "driverId": 1,
+    "vehicleType": "小型货车",
+    "vehicleBrand": "东风",
+    "vehicleModel": "DF-100",
+    "licensePlate": "京A12345",
+    "loadCapacity": 2.5,
+    "volumeCapacity": 10.0,
+    "vehicleStatus": 1,
+    "createTime": "2024-03-07T10:00:00",
+    "updateTime": "2024-03-07T10:00:00"
+  },
+  "timestamp": 1704067200000
+}
+

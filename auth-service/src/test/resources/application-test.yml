@@ -1,0 +1,27 @@
+# 测试环境配置
+spring:
+  application:
+    name: auth-service-test
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:testdb
+    username: sa
+    password:
+  cloud:
+    nacos:
+      discovery:
+        enabled: false  # 测试时禁用Nacos
+
+# JWT配置
+jwt:
+  secret: TestSecretKeyForJWTTokenGeneration2024
+  expiration: 7200
+
+# MyBatis Plus配置
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+

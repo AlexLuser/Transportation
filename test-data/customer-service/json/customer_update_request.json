@@ -1,0 +1,9 @@
+{
+  "realName": "张三",
+  "phone": "13800138001",
+  "email": "zhangsan_new@example.com",
+  "gender": 1,
+  "birthday": "1990-05-15",
+  "avatar": "https://example.com/avatar/zhangsan.jpg"
+}
+

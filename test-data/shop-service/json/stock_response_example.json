@@ -1,0 +1,15 @@
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "id": 1,
+    "warehouseId": 1,
+    "productId": 1,
+    "stock": 100,
+    "createTime": "2024-03-07T10:00:00",
+    "updateTime": "2024-03-07T10:00:00"
+  },
+  "timestamp": "2024-03-07T10:00:00"
+}
+
+

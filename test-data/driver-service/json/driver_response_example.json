@@ -1,0 +1,23 @@
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "userId": 5,
+    "realName": "李四",
+    "phone": "13900139000",
+    "email": "lisi@example.com",
+    "idCard": "110101199001011234",
+    "gender": 1,
+    "birthday": "1990-01-01",
+    "avatar": null,
+    "licenseNumber": "1234567890123456",
+    "licenseType": "C1",
+    "licenseExpireDate": "2030-12-31",
+    "status": 1,
+    "createTime": "2024-03-07T10:00:00",
+    "updateTime": "2024-03-07T10:00:00"
+  },
+  "timestamp": 1704067200000
+}
+

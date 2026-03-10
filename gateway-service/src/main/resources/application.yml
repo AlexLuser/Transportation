@@ -1,0 +1,74 @@
+server:
+  port: 8083  # 网关端口
+
+spring:
+  application:
+    name: gateway-service
+  main:
+    web-application-type: reactive  # 使用WebFlux（响应式），Gateway必须使用reactive
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848  # Nacos地址（根据实际情况修改）
+    gateway:
+      discovery:
+        locator:
+          enabled: true  # 启用服务发现
+          lower-case-service-id: true  # 服务名转小写
+      routes:
+        # 认证服务路由
+        - id: auth-service
+          uri: lb://auth-service  # lb表示负载均衡
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - StripPrefix=0  # 不截取路径前缀
+        
+        # 用户服务路由
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/users/**
+          filters:
+            - StripPrefix=0
+        
+        # 顾客服务路由
+        - id: customer-service
+          uri: lb://customer-service
+          predicates:
+            - Path=/api/customers/**
+          filters:
+            - StripPrefix=0
+        
+        # 商户服务路由
+        - id: shop-service
+          uri: lb://shop-service
+          predicates:
+            - Path=/api/shops/**,/api/products/**,/api/warehouses/**,/api/stocks/**,/api/mall/**
+          filters:
+            - StripPrefix=0
+        
+        # 运输员服务路由
+        - id: driver-service
+          uri: lb://driver-service
+          predicates:
+            - Path=/api/drivers/**
+          filters:
+            - StripPrefix=0
+
+        # 订单服务路由
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+            - Path=/api/orders/**
+          filters:
+            - StripPrefix=0
+
+        # 物流服务路由
+        - id: logistics-service
+          uri: lb://logistics-service
+          predicates:
+            - Path=/api/logistics/**
+          filters:
+            - StripPrefix=0
+

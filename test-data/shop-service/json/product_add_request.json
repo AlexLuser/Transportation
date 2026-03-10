@@ -1,0 +1,15 @@
+{
+  "categoryId": 3,
+  "productName": "优质坚果礼盒",
+  "productCode": "SP001",
+  "description": "精选优质坚果，包含核桃、杏仁、腰果等",
+  "price": 128.00,
+  "originalPrice": 158.00,
+  "unit": "盒",
+  "weight": 1.5,
+  "images": "[\"https://example.com/images/nut1.jpg\", \"https://example.com/images/nut2.jpg\"]",
+  "status": 1,
+  "salesCount": 0
+}
+
+

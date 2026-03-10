@@ -1,0 +1,76 @@
+{
+  "code": 200,
+  "message": "success",
+  "data": [
+    {
+      "id": 1,
+      "shopId": 1,
+      "categoryId": 3,
+      "productName": "优质坚果礼盒",
+      "productCode": "SP001",
+      "description": "精选优质坚果，包含核桃、杏仁、腰果等",
+      "price": 128.00,
+      "originalPrice": 158.00,
+      "unit": "盒",
+      "weight": 1.5,
+      "images": "[\"https://example.com/images/nut1.jpg\", \"https://example.com/images/nut2.jpg\"]",
+      "status": 1,
+      "salesCount": 25,
+      "createTime": "2024-01-01T10:00:00",
+      "updateTime": "2024-01-01T10:00:00"
+    },
+    {
+      "id": 2,
+      "shopId": 1,
+      "categoryId": 4,
+      "productName": "有机果汁",
+      "productCode": "SP002",
+      "description": "100%纯天然有机果汁，无添加",
+      "price": 35.00,
+      "originalPrice": 45.00,
+      "unit": "瓶",
+      "weight": 0.5,
+      "images": "[\"https://example.com/images/juice1.jpg\"]",
+      "status": 1,
+      "salesCount": 50,
+      "createTime": "2024-01-02T10:00:00",
+      "updateTime": "2024-01-02T10:00:00"
+    },
+    {
+      "id": 3,
+      "shopId": 2,
+      "categoryId": 5,
+      "productName": "商务休闲衬衫",
+      "productCode": "SP003",
+      "description": "高品质商务休闲衬衫，多色可选",
+      "price": 299.00,
+      "originalPrice": 399.00,
+      "unit": "件",
+      "weight": 0.3,
+      "images": "[\"https://example.com/images/shirt1.jpg\", \"https://example.com/images/shirt2.jpg\"]",
+      "status": 1,
+      "salesCount": 15,
+      "createTime": "2024-01-03T10:00:00",
+      "updateTime": "2024-01-03T10:00:00"
+    },
+    {
+      "id": 4,
+      "shopId": 2,
+      "categoryId": 6,
+      "productName": "时尚连衣裙",
+      "productCode": "SP004",
+      "description": "春季新款时尚连衣裙，优雅大方",
+      "price": 399.00,
+      "originalPrice": 499.00,
+      "unit": "件",
+      "weight": 0.4,
+      "images": "[\"https://example.com/images/dress1.jpg\"]",
+      "status": 1,
+      "salesCount": 8,
+      "createTime": "2024-01-04T10:00:00",
+      "updateTime": "2024-01-04T10:00:00"
+    }
+  ],
+  "timestamp": 1704067200000
+}
+
