@@ -58,7 +58,7 @@ CREATE TABLE `vehicle_info` (
 CREATE TABLE `order_delivery` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '配送ID',
   `order_id` BIGINT NOT NULL COMMENT '关联order_info表的id',
-  `driver_id` BIGINT COMMENT '关联driver_info表的id（运输员，接单后才有）',
+  `driver_id` BIGINT COMMENT '关联driver_info表的id（接单后才有）',
   `vehicle_id` BIGINT COMMENT '关联vehicle_info表的id（使用的车辆）',
   `delivery_status` TINYINT DEFAULT 0 COMMENT '配送状态：0=待接单，1=已接单，2=运输中，3=已送达，4=已取消',
   `accept_time` DATETIME COMMENT '接单时间',
@@ -79,22 +79,40 @@ CREATE TABLE `order_delivery` (
   INDEX `idx_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单配送表';
 
--- ============================================
--- 插入测试数据
--- ============================================
+-- ============================================================
+-- 测试数据
+-- user_id=5 → user.sql 中的 driver 用户（第5条记录）
+-- ============================================================
 
--- 插入运输员信息测试数据
--- 注意：user_id=5 对应user表中的driver用户（根据user.sql中的插入顺序）
--- 如果user表中的driver用户id不是5，请根据实际情况修改
-INSERT INTO `driver_info` (`user_id`, `real_name`, `phone`, `email`, `id_card`, `gender`, `birthday`, `license_number`, `license_type`, `license_expire_date`, `status`) VALUES
-(5, '李四', '13900139000', 'lisi@example.com', '110101199001011234', 1, '1990-01-01', '1234567890123456', 'C1', '2030-12-31', 1);
+-- 运输员信息（driver_id=1，即物流路线中绑定的运输员）
+-- 注意：电话使用 13700137000，与 shop_info 的电话区分，避免混淆
+INSERT INTO `driver_info`
+  (`user_id`, `real_name`, `phone`, `email`, `id_card`, `gender`, `birthday`,
+   `license_number`, `license_type`, `license_expire_date`, `status`)
+VALUES
+(5, '李四', '13700137000', 'lisi@example.com', '310101199001011234', 1, '1990-01-01',
+ 'SH0001234567890', 'C1', '2030-12-31', 1);
 
--- 插入车辆信息测试数据
--- 注意：driver_id=1 对应上面插入的driver_info记录
-INSERT INTO `vehicle_info` (`driver_id`, `vehicle_type`, `vehicle_brand`, `vehicle_model`, `license_plate`, `load_capacity`, `volume_capacity`, `vehicle_status`) VALUES
-(1, '小型货车', '东风', 'DF-100', '京A12345', 2.5, 10.0, 1),
-(1, '中型货车', '解放', 'JF-200', '京B67890', 5.0, 20.0, 1);
+-- 车辆信息（归属于 driver_id=1，驻扎上海，使用沪牌）
+-- vehicle_id=1 为物流测试使用的车辆
+INSERT INTO `vehicle_info`
+  (`driver_id`, `vehicle_type`, `vehicle_brand`, `vehicle_model`, `license_plate`,
+   `load_capacity`, `volume_capacity`, `vehicle_status`)
+VALUES
+(1, '小型货车', '东风', 'DF-100', '沪A12345', 2.5, 10.0, 1),  -- ★ 物流测试使用
+(1, '中型货车', '解放', 'JF-200', '沪B67890', 5.0, 20.0, 0);  -- 当前停用
 
--- 注意：订单配送数据会在订单服务中自动创建，这里不插入测试数据
--- 当订单状态变为"已发货"时，系统应该在order_delivery表中创建一条记录（delivery_status=0 待接单）
-
+-- 订单配送记录（order_id=1 的配送，与 logistics.sql 中 delivery_id=1 对应）
+-- ★ delivery_id=1，delivery_status=2（运输中），与 logistics_route 中的 delivery_id 保持一致
+INSERT INTO `order_delivery`
+  (`order_id`, `driver_id`, `vehicle_id`, `delivery_status`,
+   `accept_time`, `pickup_time`,
+   `delivery_address`, `receiver_name`, `receiver_phone`, `remark`)
+VALUES
+(
+  1, 1, 1, 2,                                           -- 运输中
+  DATE_SUB(NOW(), INTERVAL 90 MINUTE),                  -- 90分钟前接单
+  DATE_SUB(NOW(), INTERVAL 60 MINUTE),                  -- 60分钟前从仓库取货
+  '上海市浦东新区陆家嘴环路1000号', '张三', '13800138000',
+  '客户要求放门口'
+);

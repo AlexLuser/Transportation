@@ -19,50 +19,49 @@ import java.util.List;
 /**
  * 地址管理Controller
  * 接口设计：
- * GET    /customers/{id}/address      - 获取个人地址
- * POST   /customers/address           - 添加个人地址
- * PUT    /customers/address           - 修改个人地址
- * DELETE /customers/address/{id}      - 删除个人地址
+ * GET    /customers/{userId}/address   - 获取个人地址（路径参数为 userId，内部转换）
+ * POST   /customers/address            - 添加个人地址
+ * PUT    /customers/address            - 修改个人地址（isDefault=1 时服务层自动处理默认逻辑）
+ * DELETE /customers/address/{id}       - 删除个人地址
  */
 @Tag(name = "地址管理", description = "收货地址相关接口")
 @RestController
 @RequestMapping("/api/customers")
 public class AddressController {
-    
+
     @Autowired
     private AddressService addressService;
-    
+
     @Autowired
     private CustomerService customerService;
-    
+
     /**
-     * 获取个人地址
-     * GET /customers/{id}/address
+     * 获取个人地址列表
+     * GET /customers/{userId}/address
+     * 路径参数传入 userId，内部通过 getCustomerByUserId 转换为 customerId
      */
-    @Operation(summary = "获取个人地址", description = "根据个人ID获取个人地址列表")
-    @GetMapping("/{id}/address")
+    @Operation(summary = "获取个人地址", description = "路径参数为 userId，内部自动转换为 customerId 查询")
+    @GetMapping("/{userId}/address")
     public Result<List<Address>> getAddresses(
             @RequestHeader(value = "userId", required = false) String userIdHeader,
             @RequestHeader(value = "roleCode", required = false) String roleCode,
-            @Parameter(description = "个人ID（customer_id）", required = true)
-            @PathVariable Long id) {
+            @Parameter(description = "用户ID（user.id）", required = true)
+            @PathVariable Long userId) {
         if (!StringUtils.hasText(userIdHeader)) {
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
-        Long userId = Long.parseLong(userIdHeader);
-        
-        // 管理员可以访问所有用户的地址，普通用户只能访问自己的地址
-        if (!"admin".equals(roleCode)) {
-            Customer customer = customerService.getCustomerByUserId(userId);
-            if (customer == null || !customer.getId().equals(id)) {
-                throw new BusinessException(ResultCode.FORBIDDEN, "无权访问其他用户的地址");
-            }
+        // 普通用户只能查自己的地址
+        if (!"admin".equals(roleCode) && !userId.equals(Long.parseLong(userIdHeader))) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权访问其他用户的地址");
         }
-        
-        List<Address> addresses = addressService.getAddressesByCustomerId(id);
-        return Result.success(addresses);
+        // 内部通过 userId 转换为 customerId
+        Customer customer = customerService.getCustomerByUserId(userId);
+        if (customer == null) {
+            return Result.success(List.of());
+        }
+        return Result.success(addressService.getAddressesByCustomerId(customer.getId()));
     }
-    
+
     /**
      * 添加个人地址
      * POST /customers/address
@@ -76,24 +75,23 @@ public class AddressController {
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
         Long userId = Long.parseLong(userIdHeader);
-        
-        // 先获取customer_id
+
         Customer customer = customerService.getCustomerByUserId(userId);
         if (customer == null) {
             return Result.error("顾客信息不存在，请先完善个人信息");
         }
-        
+
         address.setCustomerId(customer.getId());
-        
         address = addressService.addAddress(address);
         return Result.success(address);
     }
-    
+
     /**
      * 修改个人地址
      * PUT /customers/address
+     * 请求体中携带 isDefault=1 时，服务层会自动处理"取消其他默认"逻辑
      */
-    @Operation(summary = "修改个人地址", description = "修改个人地址（地址ID在请求体中）")
+    @Operation(summary = "修改个人地址", description = "修改个人地址；isDefault=1 时服务层自动将其设为唯一默认地址")
     @PutMapping("/address")
     public Result<Address> updateAddress(
             @RequestHeader(value = "userId", required = false) String userIdHeader,
@@ -102,28 +100,26 @@ public class AddressController {
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
         Long userId = Long.parseLong(userIdHeader);
-        
+
         if (address.getId() == null) {
             return Result.error("地址ID不能为空");
         }
-        
-        // 验证地址是否属于当前用户
+
         Address existingAddress = addressService.getAddressById(address.getId());
         if (existingAddress == null) {
             return Result.error("地址不存在");
         }
-        
+
         Customer customer = customerService.getCustomerByUserId(userId);
         if (customer == null || !existingAddress.getCustomerId().equals(customer.getId())) {
             throw new BusinessException(ResultCode.FORBIDDEN);
         }
-        
-        address.setCustomerId(customer.getId());  // 确保customerId不被修改
-        
+
+        address.setCustomerId(customer.getId());
         address = addressService.updateAddress(address);
         return Result.success(address);
     }
-    
+
     /**
      * 删除个人地址
      * DELETE /customers/address/{id}
@@ -138,22 +134,21 @@ public class AddressController {
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
         Long userId = Long.parseLong(userIdHeader);
-        
-        // 验证地址是否属于当前用户
+
         Address existingAddress = addressService.getAddressById(id);
         if (existingAddress == null) {
             return Result.error("地址不存在");
         }
-        
+
         Customer customer = customerService.getCustomerByUserId(userId);
         if (customer == null || !existingAddress.getCustomerId().equals(customer.getId())) {
             throw new BusinessException(ResultCode.FORBIDDEN);
         }
-        
+
         boolean success = addressService.deleteAddress(id);
         return Result.success(success);
     }
-    
+
     /**
      * 根据地址ID获取地址信息（内部服务调用，用于订单服务创建配送记录）
      * GET /customers/address/{addressId}

@@ -49,3 +49,18 @@ public class Vehicle {
     private Date updateTime;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

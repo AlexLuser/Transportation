@@ -178,7 +178,7 @@ Header: userId: 5
   - 车辆1：小型货车（driver_id=1, license_plate=京A12345）
   - 车辆2：中型货车（driver_id=1, license_plate=京B67890）
 - **配送数据**：
-  - 当订单状态变为"已发货"时，系统应该在order_delivery表中创建一条记录（delivery_status=0 待接单）
+  - 当订单状态变为「待揽件」(order_status=2，商户发货) 时，系统应在 order_delivery 表创建一条记录（delivery_status=0 待接单）
 
 ### 注意事项
 1. 所有需要Token的请求，都要在Header中添加：`Authorization: Bearer {token}`
@@ -206,4 +206,19 @@ Header: userId: 5
 - **配送接口** (`/api/drivers/deliveries`): 订单配送管理
   - 需要登录（driver角色）
   - 可以查看待接单订单、接单、更新配送状态、取消配送
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

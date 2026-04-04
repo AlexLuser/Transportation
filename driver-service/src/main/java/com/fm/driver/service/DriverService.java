@@ -33,3 +33,18 @@ public interface DriverService {
     boolean updateDriverStatus(Long driverId, Integer status);
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -64,6 +64,40 @@ public class DriverController {
     }
     
     /**
+     * 【内部接口】根据 userId 查询运输员信息
+     * GET /api/drivers/internal/user/{userId}
+     * 仅供服务间调用，根据 user.id 返回运输员业务主体信息
+     */
+    @Operation(summary = "内部：根据userId查询运输员", description = "服务间内部调用，根据 user.id 返回运输员业务主体信息")
+    @GetMapping("/internal/user/{userId}")
+    public Result<Driver> getDriverByUserId(
+            @Parameter(description = "用户ID（user.id）", required = true)
+            @PathVariable Long userId) {
+        Driver driver = driverService.getDriverByUserId(userId);
+        if (driver == null) {
+            return Result.error("运输员信息不存在");
+        }
+        return Result.success(driver);
+    }
+
+    /**
+     * 【内部接口】根据 driverId 查询运输员信息
+     * GET /api/drivers/internal/{driverId}
+     * 仅供服务间调用，根据 driver.id 返回运输员信息（如姓名、电话）
+     */
+    @Operation(summary = "内部：根据driverId查询运输员", description = "服务间内部调用，根据 driver.id 返回运输员基本信息")
+    @GetMapping("/internal/{driverId}")
+    public Result<Driver> getDriverByDriverId(
+            @Parameter(description = "运输员ID（driver.id）", required = true)
+            @PathVariable Long driverId) {
+        Driver driver = driverService.getDriverById(driverId);
+        if (driver == null) {
+            return Result.error("运输员信息不存在");
+        }
+        return Result.success(driver);
+    }
+
+    /**
      * 添加运输员信息
      */
     @Operation(summary = "添加运输员信息", description = "添加新的运输员信息")
@@ -113,4 +147,10 @@ public class DriverController {
         return Result.success(driver);
     }
 }
+
+
+
+
+
+
 

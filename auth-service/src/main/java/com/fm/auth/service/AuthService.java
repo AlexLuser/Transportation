@@ -5,4 +5,6 @@ import com.fm.common.dto.LoginResponseDTO;
 
 public interface AuthService {
     LoginResponseDTO login(LoginRequestDTO loginRequest);
+
+    void logout();
 }

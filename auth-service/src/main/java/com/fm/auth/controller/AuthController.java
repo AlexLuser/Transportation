@@ -31,5 +31,16 @@ public class AuthController {
         LoginResponseDTO loginResponse = authService.login(loginRequest);
         return Result.success(loginResponse);
     }
+
+    /**
+     * 用户登出
+     * RESTful: POST /api/auth/logout
+     */
+    @Operation(summary = "用户登出", description = "用户登出，前端清除本地Token")
+    @PostMapping("/logout")
+    public Result<Void> logout() {
+        authService.logout();
+        return Result.success();
+    }
 }
 

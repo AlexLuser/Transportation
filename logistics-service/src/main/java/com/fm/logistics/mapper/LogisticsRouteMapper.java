@@ -13,40 +13,34 @@ import java.util.Map;
 public interface LogisticsRouteMapper extends BaseMapper<LogisticsRoute> {
 
     /**
-     * 统计目标区域的历史配送数据（用于 LLM Prompt 构建）
-     * 匹配规则：end_address 包含相同城市关键词，且已完成（status=2）
-     *
-     * 返回字段：
-     *   - sample_count      : 样本数量
-     *   - avg_duration_min  : 平均配送时长（分钟）
-     *   - max_duration_min  : 最大时长
-     *   - min_duration_min  : 最小时长
-     *   - delay_count       : 超出预计时间 15 分钟以上的次数
+     * 按出发小时统计过去30天的平均延误分钟数
+     * 延误 = actual_arrival_time - estimated_arrival_time（分钟，正数=晚到，负数=早到）
+     * 用途：LLM历史数据上下文——识别各时段延误规律
+     * 返回字段：hourBucket（小时0-23）、avgDelayMin（平均延误分钟）
      */
-    @Select("SELECT " +
-            "  COUNT(*) AS sample_count, " +
-            "  AVG(TIMESTAMPDIFF(MINUTE, create_time, actual_arrival_time)) AS avg_duration_min, " +
-            "  MAX(TIMESTAMPDIFF(MINUTE, create_time, actual_arrival_time)) AS max_duration_min, " +
-            "  MIN(TIMESTAMPDIFF(MINUTE, create_time, actual_arrival_time)) AS min_duration_min, " +
-            "  SUM(CASE WHEN actual_arrival_time > DATE_ADD(estimated_arrival_time, INTERVAL 15 MINUTE) THEN 1 ELSE 0 END) AS delay_count " +
+    @Select("SELECT HOUR(create_time) AS hourBucket, " +
+            "AVG(TIMESTAMPDIFF(MINUTE, estimated_arrival_time, actual_arrival_time)) AS avgDelayMin " +
             "FROM logistics_route " +
-            "WHERE route_status = 2 " +
-            "  AND end_address LIKE CONCAT('%', #{cityKeyword}, '%') " +
-            "  AND actual_arrival_time IS NOT NULL")
-    Map<String, Object> selectHistoricalStats(@Param("cityKeyword") String cityKeyword);
+            "WHERE actual_arrival_time IS NOT NULL " +
+            "AND estimated_arrival_time IS NOT NULL " +
+            "AND create_time >= DATE_SUB(NOW(), INTERVAL 30 DAY) " +
+            "GROUP BY HOUR(create_time) " +
+            "ORDER BY hourBucket")
+    List<Map<String, Object>> selectDelayStatsByHour();
 
     /**
-     * 获取最近 30 条同目标区域的完成路线（含时长），用于时间段分布分析
+     * 统计近7天起点附近（约2km范围）的异常路线数量
+     * 异常路线：route_status = 3（配送中断/超时异常）
+     * 用途：LLM历史数据上下文——评估起点区域安全性
+     * 返回字段：exceptionCount（异常次数）、lastExceptionTime（最近异常时间）
      */
-    @Select("SELECT " +
-            "  HOUR(create_time) AS depart_hour, " +
-            "  TIMESTAMPDIFF(MINUTE, create_time, actual_arrival_time) AS duration_min " +
+    @Select("SELECT COUNT(*) AS exceptionCount, MAX(create_time) AS lastExceptionTime " +
             "FROM logistics_route " +
-            "WHERE route_status = 2 " +
-            "  AND end_address LIKE CONCAT('%', #{cityKeyword}, '%') " +
-            "  AND actual_arrival_time IS NOT NULL " +
-            "ORDER BY create_time DESC " +
-            "LIMIT 30")
-    List<Map<String, Object>> selectRecentDurations(@Param("cityKeyword") String cityKeyword);
+            "WHERE route_status = 3 " +
+            "AND create_time >= DATE_SUB(NOW(), INTERVAL 7 DAY) " +
+            "AND ABS(start_lat - #{startLat}) < 0.02 " +
+            "AND ABS(start_lng - #{startLon}) < 0.02")
+    Map<String, Object> selectExceptionStats(@Param("startLat") double startLat,
+                                             @Param("startLon") double startLon);
 }
 

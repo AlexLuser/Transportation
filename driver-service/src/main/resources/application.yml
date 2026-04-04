@@ -1,5 +1,5 @@
 server:
-  port: 8088  # 运输员服务端口
+  port: 8086  # 运输员服务端口
 
 spring:
   application:
@@ -30,4 +30,19 @@ feign:
       default:
         connectTimeout: 5000
         readTimeout: 5000
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

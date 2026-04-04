@@ -1,0 +1,12 @@
+{
+  "orderId": 2,
+  "warehouseId": 2,
+  "startAddress": "上海市浦东新区物流园区B区2号（上海华东仓库）",
+  "startLatitude": 31.1985,
+  "startLongitude": 121.5889,
+  "endAddress": "上海市静安区南京西路688号",
+  "endLatitude": 31.2289,
+  "endLongitude": 121.4490,
+  "receiverName": "张三",
+  "receiverPhone": "13800138001"
+}

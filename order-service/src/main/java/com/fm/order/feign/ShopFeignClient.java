@@ -54,4 +54,13 @@ public interface ShopFeignClient {
      */
     @GetMapping("/api/warehouses/{id}")
     Result<Map<String, Object>> getWarehouseById(@PathVariable("id") Long id);
+
+    /**
+     * 【内部接口】根据 userId 查询商户信息
+     * 用于 userId → shopId 的身份转换，避免把 userId 直接当业务主键
+     * @param userId user.id（网关注入）
+     * @return 商户业务主体信息（含 id = shopId）
+     */
+    @GetMapping("/api/shops/internal/user/{userId}")
+    Result<Map<String, Object>> getShopByUserId(@PathVariable("userId") Long userId);
 }

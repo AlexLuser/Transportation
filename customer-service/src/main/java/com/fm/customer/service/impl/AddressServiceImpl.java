@@ -3,6 +3,8 @@ package com.fm.customer.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fm.common.exception.BusinessException;
+import com.fm.common.geo.AmapGeocodingService;
+import com.fm.common.geo.GeoPoint;
 import com.fm.common.result.ResultCode;
 import com.fm.customer.entity.Address;
 import com.fm.customer.mapper.AddressMapper;
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 地址服务实现类
@@ -21,6 +24,9 @@ public class AddressServiceImpl implements AddressService {
     
     @Autowired
     private AddressMapper addressMapper;
+
+    @Autowired
+    private AmapGeocodingService amapGeocodingService;
     
     @Override
     public List<Address> getAddressesByCustomerId(Long customerId) {
@@ -44,7 +50,9 @@ public class AddressServiceImpl implements AddressService {
         if (existingAddresses.isEmpty()) {
             address.setIsDefault(1);
         }
-        
+
+        applyGeocode(address, null);
+
         addressMapper.insert(address);
         
         // 如果设置为默认地址，清除其他默认地址
@@ -71,27 +79,37 @@ public class AddressServiceImpl implements AddressService {
             setDefaultAddress(address.getCustomerId(), address.getId());
             address.setIsDefault(1);
         } else if (address.getIsDefault() != null && address.getIsDefault() == 0) {
-            // 如果取消默认地址，需要检查是否还有其他默认地址
-            // 如果当前地址是唯一的默认地址，则不允许取消
-            if (existingAddress.getIsDefault() != null && existingAddress.getIsDefault() == 1) {
-                List<Address> allAddresses = getAddressesByCustomerId(address.getCustomerId());
-                long defaultCount = allAddresses.stream()
-                        .filter(addr -> addr.getIsDefault() != null && addr.getIsDefault() == 1)
-                        .count();
-                if (defaultCount <= 1) {
-                    throw new BusinessException(ResultCode.FAIL.getCode(), "至少需要保留一个默认地址");
-                }
-            }
             address.setIsDefault(0);
         }
-        
+
+        applyGeocode(address, existingAddress);
+
         addressMapper.updateById(address);
         return address;
     }
     
     @Override
+    @Transactional
     public boolean deleteAddress(Long addressId) {
-        return addressMapper.deleteById(addressId) > 0;
+        Address address = getAddressById(addressId);
+        if (address == null) {
+            return false;
+        }
+
+        boolean deleted = addressMapper.deleteById(addressId) > 0;
+
+        // 被删除的是默认地址时，从剩余地址中自动选一个设为默认
+        if (deleted && address.getIsDefault() != null && address.getIsDefault() == 1) {
+            List<Address> remaining = getAddressesByCustomerId(address.getCustomerId());
+            if (!remaining.isEmpty()) {
+                LambdaUpdateWrapper<Address> setWrapper = new LambdaUpdateWrapper<>();
+                setWrapper.eq(Address::getId, remaining.get(0).getId())
+                        .set(Address::getIsDefault, 1);
+                addressMapper.update(null, setWrapper);
+            }
+        }
+
+        return deleted;
     }
     
     @Override
@@ -117,6 +135,33 @@ public class AddressServiceImpl implements AddressService {
                 .eq(Address::getIsDefault, 1)
                 .last("LIMIT 1");
         return addressMapper.selectOne(wrapper);
+    }
+
+    /**
+     * 使用高德地理编码补全经纬度；失败时不阻断保存，更新场景下尽量保留原坐标。
+     */
+    private void applyGeocode(Address incoming, Address existing) {
+        String p = pick(incoming.getProvince(), existing != null ? existing.getProvince() : null);
+        String c = pick(incoming.getCity(), existing != null ? existing.getCity() : null);
+        String d = pick(incoming.getDistrict(), existing != null ? existing.getDistrict() : null);
+        String detail = pick(incoming.getDetailAddress(), existing != null ? existing.getDetailAddress() : null);
+        Optional<GeoPoint> geo = amapGeocodingService.geocode(p, c, d, detail);
+        if (geo.isPresent()) {
+            GeoPoint pt = geo.get();
+            incoming.setLatitude(pt.latitude());
+            incoming.setLongitude(pt.longitude());
+        } else if (existing != null) {
+            if (incoming.getLatitude() == null) {
+                incoming.setLatitude(existing.getLatitude());
+            }
+            if (incoming.getLongitude() == null) {
+                incoming.setLongitude(existing.getLongitude());
+            }
+        }
+    }
+
+    private static String pick(String incoming, String existing) {
+        return incoming != null ? incoming : existing;
     }
 }
 

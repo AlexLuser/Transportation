@@ -1,5 +1,5 @@
 server:
-  port: 8086  # 订单服务端口
+  port: 8085  # 订单服务端口
 
 spring:
   application:
@@ -22,6 +22,21 @@ mybatis-plus:
   global-config:
     db-config:
       id-type: auto  # 主键自增
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

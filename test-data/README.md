@@ -12,6 +12,15 @@ test-data/
 ├── customer-service/      # 顾客服务测试数据
 │   ├── json/              # JSON测试数据
 │   └── README.md          # 使用说明
+├── driver-service/        # 运输员服务测试数据
+│   ├── json/              # JSON测试数据
+│   └── README.md          # 使用说明
+├── shop-service/          # 商户服务测试数据
+│   ├── json/              # JSON测试数据
+│   └── README.md          # 使用说明
+├── logistics-service/     # 物流调度服务测试数据
+│   ├── json/              # JSON测试数据
+│   └── README.md          # 使用说明
 ├── user-service/          # 用户服务测试数据
 │   ├── json/              # JSON测试数据（待添加）
 │   └── README.md          # 使用说明
@@ -30,6 +39,22 @@ test-data/
 - **位置**：`customer-service/json/`
 - **说明**：顾客信息和地址管理的测试数据
 - **详情**：查看 [customer-service/README.md](./customer-service/README.md)
+
+### Driver Service（运输员服务）
+- **位置**：`driver-service/json/`
+- **说明**：运输员信息、车辆管理、配送订单的测试数据
+- **详情**：查看 [driver-service/README.md](./driver-service/README.md)
+
+### Shop Service（商户服务）
+- **位置**：`shop-service/json/`
+- **说明**：商户信息、商品、仓库管理的测试数据
+- **详情**：查看 [shop-service/README.md](./shop-service/README.md)
+
+### Logistics Service（物流调度服务）
+- **位置**：`logistics-service/json/`
+- **说明**：路线创建（含 GraphHopper 路径规划）、轨迹上报、状态变更的测试数据
+- **端口**：`http://localhost:8087`
+- **详情**：查看 [logistics-service/README.md](./logistics-service/README.md)
 
 ### User Service（用户服务）
 - **位置**：`user-service/json/`

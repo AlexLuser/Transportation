@@ -16,10 +16,18 @@ public interface LogisticsFeignClient {
 
     /**
      * 创建物流路线
-     * 请求体字段：orderId, warehouseId, startAddress, startLat(可选), startLng(可选),
-     *             endAddress, endLat(可选), endLng(可选), receiverName, receiverPhone
+     * 请求体字段：orderId, warehouseId,
+     *             startAddress, startLatitude(可选), startLongitude(可选),
+     *             endAddress,   endLatitude(可选),   endLongitude(可选),
+     *             receiverName, receiverPhone
      */
     @PostMapping("/api/logistics/routes")
     Result<Map<String, Object>> createRoute(@RequestBody Map<String, Object> request);
 }
+
+
+
+
+
+
 

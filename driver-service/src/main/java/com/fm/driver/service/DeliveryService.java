@@ -1,8 +1,8 @@
 package com.fm.driver.service;
 
-import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.fm.common.dto.PageResult;
 import com.fm.driver.entity.OrderDelivery;
+
 import java.util.List;
 
 /**
@@ -28,6 +28,11 @@ public interface DeliveryService {
      * 根据订单ID获取配送信息
      */
     OrderDelivery getDeliveryByOrderId(Long orderId);
+
+    /**
+     * 当前运输员进行中的配送（已接单、运输中）
+     */
+    List<OrderDelivery> listInProgressDeliveries(Long driverId);
     
     /**
      * 接单
@@ -49,4 +54,19 @@ public interface DeliveryService {
      */
     OrderDelivery createDelivery(Long orderId, String deliveryAddress, String receiverName, String receiverPhone);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

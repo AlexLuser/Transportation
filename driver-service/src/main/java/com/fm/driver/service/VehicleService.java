@@ -38,3 +38,18 @@ public interface VehicleService {
     boolean updateVehicleStatus(Long vehicleId, Integer status);
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

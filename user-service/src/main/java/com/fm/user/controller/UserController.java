@@ -1,7 +1,10 @@
 package com.fm.user.controller;
 
+import com.fm.common.dto.PageResult;
 import com.fm.common.entity.User;
+import com.fm.common.exception.BusinessException;
 import com.fm.common.result.Result;
+import com.fm.common.result.ResultCode;
 import com.fm.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -19,6 +22,23 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
     @Autowired
     private UserService userService;
+
+    /**
+     * 管理员分页查询全部用户，支持用户名关键词搜索
+     * RESTful: GET /api/users
+     */
+    @Operation(summary = "分页查询用户列表", description = "仅管理员可用；返回全部用户列表，支持按用户名关键词模糊搜索")
+    @GetMapping
+    public Result<PageResult<User>> getUsers(
+            @RequestHeader(value = "roleCode", required = false) String roleCode,
+            @RequestParam(value = "current", defaultValue = "1") Long current,
+            @RequestParam(value = "size", defaultValue = "15") Long size,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        if (!"admin".equals(roleCode)) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权访问");
+        }
+        return Result.success(userService.getAllUsers(current, size, keyword));
+    }
 
     /**
      * 根据ID获取用户

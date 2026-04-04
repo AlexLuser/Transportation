@@ -4,11 +4,14 @@ import com.fm.common.dto.PageResult;
 import com.fm.common.result.Result;
 import com.fm.shop.entity.Product;
 import com.fm.shop.service.ProductService;
+import com.fm.shop.service.ShopService;
+import com.fm.shop.entity.Shop;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+
 
 import java.util.List;
 
@@ -26,6 +29,8 @@ public class MallController {
     @Autowired
     private ProductService productService;
     
+    @Autowired
+    private ShopService shopService;
     /**
      * 获取商城商品列表（分页）
      * 返回所有上架的商品，支持按分类筛选、关键词搜索、分页和排序
@@ -50,13 +55,33 @@ public class MallController {
             @RequestParam(value = "categoryId", required = false) Long categoryId,
             @Parameter(description = "关键词（可选，用于搜索商品名称）")
             @RequestParam(value = "keyword", required = false) String keyword,
+            @Parameter(description = "商户ID（可选）")
+            @RequestParam(value = "shopId", required = false) Long shopId,
             @Parameter(description = "排序字段（可选：price-价格, salesCount-销量, createTime-创建时间）")
             @RequestParam(value = "sortField", required = false) String sortField,
             @Parameter(description = "排序方向（可选：asc-升序, desc-降序）")
             @RequestParam(value = "sortOrder", required = false) String sortOrder) {
-        PageResult<Product> pageResult = productService.getAllOnSaleProductsPage(
+        PageResult<Product> pageResult;
+        if(shopId != null) {
+            pageResult = productService.getProductsByShopIdPage(
+            current, size, shopId, categoryId, keyword, sortField, sortOrder);
+        } else {
+            pageResult = productService.getAllOnSaleProductsPage(
             current, size, categoryId, keyword, sortField, sortOrder);
+        }
         return Result.success(pageResult);
+    }
+
+    @Operation(summary = "获取商户信息", description = "获取商户信息")
+    @GetMapping("/shop/{id}")
+    public Result<Shop> getMallShop(
+            @Parameter(description = "商家ID", required = true)
+            @PathVariable Long id) {
+        Shop shop = shopService.getShopById(id);
+        if (shop == null) {
+            return Result.error("商家不存在");
+        }
+        return Result.success(shop);
     }
 }
 

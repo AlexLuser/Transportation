@@ -1,0 +1,32 @@
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": 2,
+    "routeNo": "LR202603131500000042",
+    "orderId": 2,
+    "deliveryId": null,
+    "driverId": null,
+    "warehouseId": 2,
+    "startAddress": "上海市浦东新区物流园区B区2号（上海华东仓库）",
+    "startLat": 31.1985,
+    "startLon": 121.5889,
+    "endAddress": "上海市静安区南京西路688号",
+    "endLat": 31.2289,
+    "endLon": 121.4490,
+    "currentLat": null,
+    "currentLon": null,
+    "currentAddress": null,
+    "lastTrackTime": null,
+    "routeStatus": 0,
+    "estimatedArrivalTime": "2026-03-13T16:30:00.000+08:00",
+    "actualArrivalTime": null,
+    "plannedRoute": "{\"type\":\"LineString\",\"coordinates\":[[121.5889,31.1985],[121.5500,31.2100],[121.5000,31.2200],[121.4490,31.2289]]}",
+    "receiverName": "张三",
+    "receiverPhone": "13800138001",
+    "remark": null,
+    "createTime": "2026-03-13T15:00:00.000+08:00",
+    "updateTime": "2026-03-13T15:00:00.000+08:00"
+  }
+}
+

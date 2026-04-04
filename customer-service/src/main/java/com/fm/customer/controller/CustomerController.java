@@ -15,51 +15,46 @@ import org.springframework.web.bind.annotation.*;
 /**
  * 顾客信息管理Controller
  * 接口设计：
- * GET    /customers/{id}        - 获取个人信息
- * POST   /customers             - 添加个人信息
- * PUT    /customers             - 修改个人信息
- * DELETE /customers/{id}        - 删除个人信息
+ * GET    /customers/{userId}     - 获取个人信息（路径参数为 userId，内部转换为 customerId）
+ * POST   /customers              - 添加个人信息
+ * PUT    /customers              - 修改个人信息
+ * DELETE /customers/{userId}     - 删除个人信息
  */
 @Tag(name = "顾客管理", description = "顾客信息相关接口")
 @RestController
 @RequestMapping("/api/customers")
 public class CustomerController {
-    
+
     @Autowired
     private CustomerService customerService;
-    
+
     /**
      * 获取个人信息
-     * GET /customers/{id}
+     * GET /customers/{userId}
+     * 路径参数传入 userId，内部通过 getCustomerByUserId 转换为 customerId
      */
-    @Operation(summary = "获取个人信息", description = "根据个人ID获取个人信息")
-    @GetMapping("/{id}")
+    @Operation(summary = "获取个人信息", description = "路径参数为 userId，内部自动转换为 customerId 查询")
+    @GetMapping("/{userId}")
     public Result<Customer> getCustomer(
             @RequestHeader(value = "userId", required = false) String userIdHeader,
             @RequestHeader(value = "roleCode", required = false) String roleCode,
-            @Parameter(description = "个人ID（customer_id）", required = true)
-            @PathVariable Long id) {
+            @Parameter(description = "用户ID（user.id）", required = true)
+            @PathVariable Long userId) {
         if (!StringUtils.hasText(userIdHeader)) {
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
-        Long userId = Long.parseLong(userIdHeader);
-        
-        Customer customer = customerService.getCustomerById(id);
+        // 普通用户只能查自己
+        if (!"admin".equals(roleCode) && !userId.equals(Long.parseLong(userIdHeader))) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权访问其他用户的信息");
+        }
+        // 内部通过 userId 转换为顾客实体
+        Customer customer = customerService.getCustomerByUserId(userId);
         if (customer == null) {
             return Result.error("个人信息不存在");
         }
-        
-        // 管理员可以访问所有用户信息，普通用户只能访问自己的信息
-        if (!"admin".equals(roleCode)) {
-            Customer currentUserCustomer = customerService.getCustomerByUserId(userId);
-            if (currentUserCustomer == null || !currentUserCustomer.getId().equals(customer.getId())) {
-                throw new BusinessException(ResultCode.FORBIDDEN, "无权访问其他用户的信息");
-            }
-        }
-        
         return Result.success(customer);
     }
-    
+
     /**
      * 添加个人信息
      * POST /customers
@@ -73,18 +68,17 @@ public class CustomerController {
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
         Long userId = Long.parseLong(userIdHeader);
-        
-        // 检查是否已存在
+
         Customer existingCustomer = customerService.getCustomerByUserId(userId);
         if (existingCustomer != null) {
             return Result.error("个人信息已存在，请使用PUT方法更新");
         }
-        
+
         customer.setUserId(userId);
         customer = customerService.saveOrUpdateCustomer(customer);
         return Result.success(customer);
     }
-    
+
     /**
      * 修改个人信息
      * PUT /customers
@@ -98,51 +92,59 @@ public class CustomerController {
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
         Long userId = Long.parseLong(userIdHeader);
-        
-        // 获取现有记录
+
         Customer existingCustomer = customerService.getCustomerByUserId(userId);
         if (existingCustomer == null) {
             return Result.error("个人信息不存在，请使用POST方法创建");
         }
-        
-        // 更新现有记录
+
         customer.setId(existingCustomer.getId());
-        customer.setUserId(userId);  // 确保userId不被修改
+        customer.setUserId(userId);
         customer = customerService.saveOrUpdateCustomer(customer);
         return Result.success(customer);
     }
-    
+
+    /**
+     * 【内部接口】根据 userId 查询顾客信息
+     * GET /customers/internal/user/{userId}
+     */
+    @Operation(summary = "内部：根据userId查询顾客", description = "服务间内部调用，根据 user.id 返回顾客业务主体信息")
+    @GetMapping("/internal/user/{userId}")
+    public Result<Customer> getCustomerByUserId(
+            @Parameter(description = "用户ID（user.id）", required = true)
+            @PathVariable Long userId) {
+        Customer customer = customerService.getCustomerByUserId(userId);
+        if (customer == null) {
+            return Result.error("顾客信息不存在");
+        }
+        return Result.success(customer);
+    }
+
     /**
      * 删除个人信息
-     * DELETE /customers/{id}
+     * DELETE /customers/{userId}
+     * 路径参数为 userId，内部转换为 customerId
      */
-    @Operation(summary = "删除个人信息", description = "根据个人ID删除个人信息")
-    @DeleteMapping("/{id}")
+    @Operation(summary = "删除个人信息", description = "根据 userId 删除个人信息")
+    @DeleteMapping("/{userId}")
     public Result<Boolean> deleteCustomer(
             @RequestHeader(value = "userId", required = false) String userIdHeader,
             @RequestHeader(value = "roleCode", required = false) String roleCode,
-            @Parameter(description = "个人ID（customer_id）", required = true)
-            @PathVariable Long id) {
+            @Parameter(description = "用户ID（user.id）", required = true)
+            @PathVariable Long userId) {
         if (!StringUtils.hasText(userIdHeader)) {
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
-        Long userId = Long.parseLong(userIdHeader);
-        
-        Customer customer = customerService.getCustomerById(id);
+        if (!"admin".equals(roleCode) && !userId.equals(Long.parseLong(userIdHeader))) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权删除其他用户的信息");
+        }
+
+        Customer customer = customerService.getCustomerByUserId(userId);
         if (customer == null) {
             return Result.error("个人信息不存在");
         }
-        
-        // 管理员可以删除所有用户信息，普通用户只能删除自己的信息
-        if (!"admin".equals(roleCode)) {
-            Customer currentUserCustomer = customerService.getCustomerByUserId(userId);
-            if (currentUserCustomer == null || !currentUserCustomer.getId().equals(customer.getId())) {
-                throw new BusinessException(ResultCode.FORBIDDEN, "无权删除其他用户的信息");
-            }
-        }
-        
-        // 删除顾客信息（注意：这里只删除顾客信息，关联的地址需要单独删除）
-        boolean success = customerService.deleteCustomer(id);
+
+        boolean success = customerService.deleteCustomer(customer.getId());
         return Result.success(success);
     }
 }

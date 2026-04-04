@@ -15,7 +15,7 @@ public class SwaggerConfig {
                 .info(new Info()
                         .title("物流管理系统 - 物流调度服务API文档")
                         .version("1.0.0")
-                        .description("物流调度服务接口文档，包含路线管理、实时追踪、调度管理及AI预留接口")
+                        .description("物流调度服务接口文档，包含：物流路线管理、实时GPS轨迹追踪")
                         .contact(new Contact()
                                 .name("Transportation System")
                                 .email("your-email@example.com"))
@@ -24,4 +24,6 @@ public class SwaggerConfig {
                                 .url("https://www.apache.org/licenses/LICENSE-2.0.html")));
     }
 }
+
+
 

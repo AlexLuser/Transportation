@@ -21,6 +21,10 @@ public class Result<T> {
         return new Result<>(200, "success", data, System.currentTimeMillis());
     }
 
+    public static Result<Void> success() {
+        return new Result<>(200, "success", null, System.currentTimeMillis());
+    }
+
     public static <T> Result<T> error(String message) {
         return new Result<>(500, message, null, System.currentTimeMillis());
     }

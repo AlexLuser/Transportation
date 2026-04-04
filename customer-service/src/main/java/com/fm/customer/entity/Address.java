@@ -33,6 +33,10 @@ public class Address {
     private String postalCode;      // 邮编
     
     private Integer isDefault;      // 是否默认地址：0=否，1=是
+
+    private Double latitude;        // 收货地址纬度（用于物流路线规划终点）
+
+    private Double longitude;       // 收货地址经度（用于物流路线规划终点）
     
     private Date createTime;        // 创建时间
     

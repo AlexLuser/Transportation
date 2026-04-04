@@ -81,4 +81,9 @@ public class AuthServiceImpl implements AuthService {
 
         return loginResponse;
     }
+
+    @Override
+    public void logout() {
+        // 无状态JWT，token由前端清除，服务端无需额外操作
+    }
 }

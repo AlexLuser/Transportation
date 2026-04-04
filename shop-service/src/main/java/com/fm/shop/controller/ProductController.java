@@ -169,31 +169,38 @@ public class ProductController {
      * @param product 商品信息（必须包含id）
      * @return 修改后的商品信息
      */
-    @Operation(summary = "修改商品", description = "修改商品信息")
+    @Operation(summary = "修改商品", description = "修改商品信息；管理员可修改任意商品（含审核状态），商户只能修改自己的商品")
     @PutMapping
     public Result<Product> updateProduct(
             @RequestHeader(value = "userId", required = false) String userIdHeader,
+            @RequestHeader(value = "roleCode", required = false) String roleCode,
             @RequestBody Product product) {
         if (!StringUtils.hasText(userIdHeader)) {
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
-        Long userId = Long.parseLong(userIdHeader);
-        
+
         if (product.getId() == null) {
             return Result.error("商品ID不能为空");
         }
-        
+
         Product existingProduct = productService.getProductById(product.getId());
         if (existingProduct == null) {
             return Result.error("商品不存在");
         }
-        
-        Shop shop = shopService.getShopByUserId(userId);
-        if (shop == null || !existingProduct.getShopId().equals(shop.getId())) {
-            throw new BusinessException(ResultCode.FORBIDDEN);
+
+        if ("admin".equals(roleCode)) {
+            // 管理员：保留原始 shopId，只允许修改状态字段（审核通过/驳回）
+            product.setShopId(existingProduct.getShopId());
+        } else {
+            // 商户：校验归属，只能修改自己店铺的商品
+            Long userId = Long.parseLong(userIdHeader);
+            Shop shop = shopService.getShopByUserId(userId);
+            if (shop == null || !existingProduct.getShopId().equals(shop.getId())) {
+                throw new BusinessException(ResultCode.FORBIDDEN);
+            }
+            product.setShopId(shop.getId());
         }
-        
-        product.setShopId(shop.getId());
+
         product = productService.saveOrUpdateProduct(product);
         return Result.success(product);
     }

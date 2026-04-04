@@ -3,13 +3,13 @@
   "message": "操作成功",
   "data": {
     "id": 1,
-    "warehouseName": "北京中央仓库",
-    "warehousePhone": "010-12345678",
-    "province": "北京市",
-    "city": "北京市",
-    "district": "朝阳区",
-    "detailAddress": "朝阳区物流园区A区1号",
-    "postalCode": "100020",
+    "warehouseName": "上海闵行分拨仓",
+    "warehousePhone": "021-51001001",
+    "province": "上海市",
+    "city": "上海市",
+    "district": "闵行区",
+    "detailAddress": "闵行区元江路426号物流园1号库",
+    "postalCode": "201111",
     "capacity": 10000,
     "status": 1,
     "createTime": "2024-03-07T10:00:00",
@@ -17,5 +17,20 @@
   },
   "timestamp": "2024-03-07T10:00:00"
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

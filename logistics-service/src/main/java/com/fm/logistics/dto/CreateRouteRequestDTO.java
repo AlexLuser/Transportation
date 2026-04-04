@@ -1,44 +1,41 @@
 package com.fm.logistics.dto;
 
-import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 /**
  * 创建物流路线请求 DTO
- * 由 order-service 在"订单发货"时调用，自动创建物流路线
+ * 由 order-service 在"订单发货"时调用
  */
 @Data
-@Schema(description = "创建物流路线请求")
 public class CreateRouteRequestDTO {
 
-    @Schema(description = "订单ID", requiredMode = Schema.RequiredMode.REQUIRED)
+    /** 订单ID（必填） */
     private Long orderId;
 
-    @Schema(description = "仓库ID（发货仓库，路线起点）", requiredMode = Schema.RequiredMode.REQUIRED)
+    /** 发货仓库ID（必填） */
     private Long warehouseId;
 
-    @Schema(description = "发货地址（仓库地址，快照）", requiredMode = Schema.RequiredMode.REQUIRED)
+    /** 出发地址（仓库地址快照，必填） */
     private String startAddress;
 
-    @Schema(description = "发货地纬度（可选，用于精确路线规划）")
-    private Double startLat;
+    /** 出发地纬度（可选） */
+    private Double startLatitude;
 
-    @Schema(description = "发货地经度（可选，用于精确路线规划）")
-    private Double startLng;
+    /** 出发地经度（可选） */
+    private Double startLongitude;
 
-    @Schema(description = "收货地址（快照）", requiredMode = Schema.RequiredMode.REQUIRED)
+    /** 收货地址（快照，必填） */
     private String endAddress;
 
-    @Schema(description = "收货地纬度（可选）")
-    private Double endLat;
+    /** 收货地纬度（可选） */
+    private Double endLatitude;
 
-    @Schema(description = "收货地经度（可选）")
-    private Double endLng;
+    /** 收货地经度（可选） */
+    private Double endLongitude;
 
-    @Schema(description = "收货人姓名")
+    /** 收货人姓名（可选） */
     private String receiverName;
 
-    @Schema(description = "收货人电话")
+    /** 收货人电话（可选） */
     private String receiverPhone;
 }
-

@@ -35,6 +35,8 @@ CREATE TABLE `customer_address` (
   `detail_address` VARCHAR(255) NOT NULL COMMENT '详细地址',
   `postal_code` VARCHAR(10) COMMENT '邮编',
   `is_default` TINYINT DEFAULT 0 COMMENT '是否默认地址：0=否，1=是',
+  `latitude` DOUBLE DEFAULT NULL COMMENT '收货地址纬度（用于物流路线规划终点）',
+  `longitude` DOUBLE DEFAULT NULL COMMENT '收货地址经度（用于物流路线规划终点）',
   `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
@@ -42,17 +44,21 @@ CREATE TABLE `customer_address` (
   INDEX `idx_is_default` (`is_default`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='收货地址表';
 
--- 插入测试数据
--- 注意：user_id=2 对应user表中的customer用户（根据user.sql中的插入顺序）
--- 如果user表中的customer用户id不是2，请根据实际情况修改
+-- ============================================================
+-- 测试数据
+-- user_id=2 对应 user.sql 中的 customer 用户（第2条记录）
+-- ============================================================
 
--- 插入顾客信息测试数据
+-- 顾客信息
 INSERT INTO `customer_info` (`user_id`, `real_name`, `phone`, `email`, `gender`, `birthday`, `status`) VALUES
-(2, '张三', '13800138000', 'zhangsan@example.com', 1, '1990-05-15', 1);  -- 关联user表中customer用户（user_id=2）
+(2, '张三', '13800138000', 'zhangsan@example.com', 1, '1990-05-15', 1);
 
--- 插入收货地址测试数据
--- 注意：customer_id=1 对应上面插入的customer_info记录
-INSERT INTO `customer_address` (`customer_id`, `receiver_name`, `receiver_phone`, `province`, `city`, `district`, `detail_address`, `postal_code`, `is_default`) VALUES
-(1, '张三', '13800138000', '北京市', '北京市', '朝阳区', '朝阳区建国路88号SOHO现代城A座1001室', '100025', 1),  -- 默认地址
-(1, '张三', '13800138001', '上海市', '上海市', '浦东新区', '浦东新区陆家嘴环路1000号', '200120', 0);  -- 非默认地址
-
+-- 收货地址（均为上海，与 OSM 数据范围一致）
+-- customer_id=1 对应上面插入的顾客记录
+INSERT INTO `customer_address`
+  (`customer_id`, `receiver_name`, `receiver_phone`, `province`, `city`, `district`, `detail_address`, `postal_code`, `is_default`, `latitude`, `longitude`)
+VALUES
+-- 默认地址：上海浦东（物流测试主用地址，order_id=1 的收货地址，坐标与 logistics.sql 一致）
+(1, '张三', '13800138000', '上海市', '上海市', '浦东新区', '浦东新区陆家嘴环路1000号', '200120', 1, 31.2356, 121.5050),
+-- 备用地址：上海静安
+(1, '张三', '13800138001', '上海市', '上海市', '静安区', '静安区南京西路688号', '200041', 0, 31.2289, 121.4490);

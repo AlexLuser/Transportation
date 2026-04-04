@@ -52,5 +52,14 @@ public interface CustomerFeignClient {
      */
     @GetMapping("/address/{addressId}")
     Result<Map<String, Object>> getAddressById(@PathVariable("addressId") Long addressId);
+
+    /**
+     * 【内部接口】根据 userId 查询顾客信息
+     * 用于 userId → customerId 的身份转换，避免把 userId 直接当业务主键
+     * @param userId user.id（网关注入）
+     * @return 顾客业务主体信息（含 id = customerId）
+     */
+    @GetMapping("/internal/user/{userId}")
+    Result<Map<String, Object>> getCustomerByUserId(@PathVariable("userId") Long userId);
 }
 

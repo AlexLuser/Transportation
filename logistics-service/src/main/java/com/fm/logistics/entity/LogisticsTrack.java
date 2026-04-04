@@ -6,49 +6,32 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import java.util.Date;
 
-/**
- * 物流轨迹点实体
- * 记录运输员在运输过程中的每个 GPS 位置上报点，形成完整运输轨迹
- */
 @Data
 @TableName("logistics_track")
 public class LogisticsTrack {
-
-    /** 轨迹点ID（主键） */
+    /*主键*/
     @TableId(type = IdType.AUTO)
     private Long id;
-
-    /** 关联 logistics_route 表的 id */
+    /*路线ID*/
     private Long routeId;
-
-    /** 运输员ID（关联 driver_info 表的 id） */
+    /*运输员ID*/
     private Long driverId;
-
-    /** 纬度 */
+    /*纬度*/
     private Double latitude;
-
-    /** 经度 */
+    /*经度*/
     private Double longitude;
-
-    /** 海拔（米，可选） */
+    /*海拔*/
     private Double altitude;
-
-    /** 速度（km/h，可选） */
+    /*速度*/
     private Double speed;
-
-    /** 方向角（0-360度，0=正北，可选） */
+    /*方向角*/
     private Double heading;
-
-    /** GPS精度（米，可选） */
+    /*GPS精度*/
     private Double accuracy;
-
-    /** 当前位置描述（前端逆地理编码后传入，或由服务端处理） */
+    /*位置描述*/
     private String address;
-
-    /** 位置上报时间（客户端时间，比 createTime 更准确） */
+    /*GPS上报时间*/
     private Date trackTime;
-
-    /** 记录创建时间 */
+    /*创建时间*/
     private Date createTime;
 }
-

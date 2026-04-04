@@ -1,312 +1,276 @@
 package com.fm.logistics.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fm.common.exception.BusinessException;
 import com.fm.common.result.ResultCode;
 import com.fm.logistics.dto.CreateRouteRequestDTO;
+import com.fm.logistics.dto.CreateRouteResponseDTO;
+import org.springframework.dao.DuplicateKeyException;
 import com.fm.logistics.dto.RouteDetailDTO;
-import com.fm.logistics.dto.llm.HistoricalStats;
-import com.fm.logistics.dto.llm.LLMRouteAnalysisResult;
 import com.fm.logistics.entity.LogisticsNode;
 import com.fm.logistics.entity.LogisticsRoute;
-import com.fm.logistics.entity.LogisticsTrack;
 import com.fm.logistics.mapper.LogisticsNodeMapper;
 import com.fm.logistics.mapper.LogisticsRouteMapper;
 import com.fm.logistics.mapper.LogisticsTrackMapper;
-import com.fm.logistics.service.HistoricalAnalysisService;
-import com.fm.logistics.service.LLMService;
+import com.fm.logistics.dto.RouteResultDTO;
 import com.fm.logistics.service.LogisticsRouteService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.fm.logistics.service.RoutePlanningService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 
 @Service
-public class LogisticsRouteServiceImpl extends ServiceImpl<LogisticsRouteMapper, LogisticsRoute>
-        implements LogisticsRouteService {
-
-    private static final Logger log = LoggerFactory.getLogger(LogisticsRouteServiceImpl.class);
+public class LogisticsRouteServiceImpl implements LogisticsRouteService {
 
     @Autowired
-    private LogisticsRouteMapper routeMapper;
+    private LogisticsRouteMapper logisticsRouteMapper;
 
     @Autowired
-    private LogisticsNodeMapper nodeMapper;
+    private LogisticsNodeMapper logisticsNodeMapper;
 
     @Autowired
-    private LogisticsTrackMapper trackMapper;
+    private LogisticsTrackMapper logisticsTrackMapper;
 
     @Autowired
-    private LLMService llmService;
+    private RoutePlanningService routePlanningService;
 
     @Autowired
-    private HistoricalAnalysisService historicalAnalysisService;
+    private com.fm.logistics.feign.DriverFeignClient driverFeignClient;
 
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    // ----------------------------------------------------------------
+    //  创建路线
+    // ----------------------------------------------------------------
+
+    /**
+     * 创建物流路线（幂等）
+     *
+     * 设计要点：
+     *  1. LLM/A* 路线规划在事务外执行，避免长事务（规划可能耗时 5~30s）持有 DB 连接，
+     *     从而消除并发场景下 MyBatis L1 缓存读旧快照导致补救 SELECT 仍返回 0 的问题。
+     *  2. 实际 DB 写操作用 TransactionTemplate 包裹，事务窗口缩短为毫秒级，
+     *     并发竞争概率极低；即便出现竞争，DuplicateKeyException 兜底后再次 SELECT
+     *     使用全新 SqlSession（空缓存），可正确读到已提交数据。
+     */
     @Override
-    @Transactional
-    public LogisticsRoute createRoute(CreateRouteRequestDTO request) {
-        // 幂等检查：同一订单只创建一条路线
-        LambdaQueryWrapper<LogisticsRoute> existWrapper = new LambdaQueryWrapper<>();
-        existWrapper.eq(LogisticsRoute::getOrderId, request.getOrderId());
-        LogisticsRoute existing = routeMapper.selectOne(existWrapper);
+    public CreateRouteResponseDTO createRoute(CreateRouteRequestDTO requestDTO) {
+        // ── 1. 快速前置检查（无事务，不持有 DB 连接）──
+        LogisticsRoute existing = logisticsRouteMapper.selectOne(
+                new LambdaQueryWrapper<LogisticsRoute>().eq(LogisticsRoute::getOrderId, requestDTO.getOrderId()));
         if (existing != null) {
-            return existing;
+            return CreateRouteResponseDTO.existingRoute(existing);
         }
 
-        // 创建路线
+        // ── 2. 构建路线对象（无事务）──
         LogisticsRoute route = new LogisticsRoute();
         route.setRouteNo(generateRouteNo());
-        route.setOrderId(request.getOrderId());
-        route.setWarehouseId(request.getWarehouseId());
-        route.setStartAddress(request.getStartAddress());
-        route.setStartLat(request.getStartLat());
-        route.setStartLng(request.getStartLng());
-        route.setEndAddress(request.getEndAddress());
-        route.setEndLat(request.getEndLat());
-        route.setEndLng(request.getEndLng());
-        route.setReceiverName(request.getReceiverName());
-        route.setReceiverPhone(request.getReceiverPhone());
-        route.setRouteStatus(0);  // 待出发
-        routeMapper.insert(route);
+        route.setOrderId(requestDTO.getOrderId());
+        route.setWarehouseId(requestDTO.getWarehouseId());
+        route.setStartAddress(requestDTO.getStartAddress());
+        route.setStartLatitude(requestDTO.getStartLatitude());
+        route.setStartLongitude(requestDTO.getStartLongitude());
+        route.setEndAddress(requestDTO.getEndAddress());
+        route.setEndLatitude(requestDTO.getEndLatitude());
+        route.setEndLongitude(requestDTO.getEndLongitude());
+        route.setReceiverName(requestDTO.getReceiverName());
+        route.setReceiverPhone(requestDTO.getReceiverPhone());
+        route.setRouteStatus(0);
 
-        // 自动创建起始节点和终止节点
-        createDefaultNodes(route);
-
-        // 异步触发 LLM 分析（不阻塞路线创建主流程）
-        triggerLLMRouteAnalysis(route);
-
-        return route;
-    }
-
-    /**
-     * 异步触发 LLM 路线分析
-     * 步骤：
-     *   1. 聚合历史数据（HistoricalAnalysisService）
-     *   2. 调用 LLMService.analyzeRoute()（含 Prompt 构建和 HTTP 调用）
-     *   3. 将分析结果写回 logistics_route.estimated_arrival_time 和 ai_analysis
-     *
-     * 使用 @Async 异步执行：LLM 响应可能需要 5-30s，不应阻塞订单发货流程。
-     * 若 LLM 不可用，降级结果也会写入，确保字段不为空。
-     */
-    @Async
-    public void triggerLLMRouteAnalysis(LogisticsRoute route) {
-        try {
-            // 1. 获取出发小时（用于时段特征分析）
-            int departHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
-
-            // 2. 聚合历史数据
-            HistoricalStats historical = historicalAnalysisService
-                    .analyzeByDestination(route.getEndAddress(), departHour);
-            log.info("[LLM] 路线 {} 历史分析完成：{}条样本，均值{}分钟",
-                    route.getRouteNo(), historical.getSampleCount(),
-                    (int) historical.getAvgDurationMinutes());
-
-            // 3. 调用 LLM 分析（含 Prompt 构建，支持降级）
-            LLMRouteAnalysisResult result = llmService.analyzeRoute(route, historical);
-
-            // 4. 将结果写回路线记录
-            LogisticsRoute update = new LogisticsRoute();
-            update.setId(route.getId());
-            update.setEstimatedArrivalTime(result.getEstimatedArrivalTime());
-
-            // 构建 AI 分析摘要（存储在 ai_analysis 字段，可供前端展示）
-            String aiAnalysis = buildAiAnalysisJson(result, historical);
-            update.setAiAnalysis(aiAnalysis);
-
-            routeMapper.updateById(update);
-            log.info("[LLM] 路线 {} AI 分析结果已写入：预计到达 {}，风险等级 {}，isFallback={}",
-                    route.getRouteNo(), result.getEstimatedArrivalTime(),
-                    result.getRiskLevel(), result.isFallback());
-
-        } catch (Exception e) {
-            log.error("[LLM] 路线 {} 异步分析失败: {}", route.getRouteNo(), e.getMessage(), e);
+        // ── 3. 路径规划（耗时操作，在事务外执行，不阻塞 DB 连接）──
+        RouteResultDTO planResult = null;
+        if (route.getStartLatitude() != null && route.getStartLongitude() != null
+                && route.getEndLatitude() != null && route.getEndLongitude() != null) {
+            planResult = routePlanningService.planRoute(
+                    route.getStartLatitude(), route.getStartLongitude(),
+                    route.getEndLatitude(),   route.getEndLongitude()
+            );
+            if (planResult != null && planResult.isSuccess()) {
+                route.setPlannedRoute(planResult.getRoutePoints().toJsonString());
+                route.setEstimatedArrivalTime(
+                        new Date(System.currentTimeMillis() + planResult.getDurationMs()));
+            }
         }
+
+        // ── 4. 短事务：仅包含 DB 写操作（毫秒级，全新 SqlSession，空缓存）──
+        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+        txTemplate.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        final RouteResultDTO planResultFinal = planResult;
+        return txTemplate.execute(status -> {
+            // 事务内二次检查（全新 SqlSession，不受前置检查缓存影响）
+            LogisticsRoute recheck = logisticsRouteMapper.selectOne(
+                    new LambdaQueryWrapper<LogisticsRoute>().eq(LogisticsRoute::getOrderId, requestDTO.getOrderId()));
+            if (recheck != null) {
+                return CreateRouteResponseDTO.existingRoute(recheck);
+            }
+
+            try {
+                logisticsRouteMapper.insert(route);
+            } catch (DuplicateKeyException e) {
+                // 极小并发窗口兜底：INSERT 前 clearLocalCache 已清空缓存，
+                // 此处 SELECT 使用同一 SqlSession 的空缓存直接读库，可见已提交行
+                LogisticsRoute committed = logisticsRouteMapper.selectOne(
+                        new LambdaQueryWrapper<LogisticsRoute>().eq(LogisticsRoute::getOrderId, requestDTO.getOrderId()));
+                if (committed != null) {
+                    return CreateRouteResponseDTO.existingRoute(committed);
+                }
+                throw e;
+            }
+
+            createDefaultNodes(route);
+            return CreateRouteResponseDTO.of(route, planResultFinal);
+        });
     }
 
-    /**
-     * 将 LLM 分析结果序列化为 JSON 字符串，存入 ai_analysis 字段
-     */
-    private String buildAiAnalysisJson(LLMRouteAnalysisResult result, HistoricalStats historical) {
-        StringBuilder sb = new StringBuilder("{");
-        sb.append("\"estimatedDurationMinutes\":").append(result.getEstimatedDurationMinutes()).append(",");
-        sb.append("\"riskLevel\":").append(result.getRiskLevel()).append(",");
-        sb.append("\"riskFactors\":").append(listToJson(result.getRiskFactors())).append(",");
-        sb.append("\"recommendation\":\"").append(escapeJson(result.getRecommendation())).append("\",");
-        sb.append("\"historicalSamples\":").append(historical.getSampleCount()).append(",");
-        sb.append("\"historicalAvgMinutes\":").append((int) historical.getAvgDurationMinutes()).append(",");
-        sb.append("\"historicalDelayRate\":").append(String.format("%.2f", historical.getDelayRate())).append(",");
-        sb.append("\"isFallback\":").append(result.isFallback());
-        sb.append("}");
-        return sb.toString();
-    }
-
-    @Override
-    public RouteDetailDTO getRouteDetailByOrderId(Long orderId) {
-        LambdaQueryWrapper<LogisticsRoute> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(LogisticsRoute::getOrderId, orderId);
-        LogisticsRoute route = routeMapper.selectOne(wrapper);
-        if (route == null) {
-            return null;
-        }
-        return buildRouteDetailDTO(route);
-    }
+    // ----------------------------------------------------------------
+    //  查询路线详情（三种方式，共用同一个组装方法）
+    // ----------------------------------------------------------------
 
     @Override
     public RouteDetailDTO getRouteDetailById(Long routeId) {
-        LogisticsRoute route = routeMapper.selectById(routeId);
-        if (route == null) {
-            return null;
-        }
+        LogisticsRoute route = getRouteOrThrow(routeId);
         return buildRouteDetailDTO(route);
     }
 
     @Override
     public RouteDetailDTO getRouteDetailByRouteNo(String routeNo) {
-        LambdaQueryWrapper<LogisticsRoute> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(LogisticsRoute::getRouteNo, routeNo);
-        LogisticsRoute route = routeMapper.selectOne(wrapper);
-        if (route == null) {
-            return null;
-        }
+        LogisticsRoute route = logisticsRouteMapper.selectOne(
+                new LambdaQueryWrapper<LogisticsRoute>().eq(LogisticsRoute::getRouteNo, routeNo));
+        if (route == null) throw new BusinessException(ResultCode.FAIL.getCode(), "路线不存在");
         return buildRouteDetailDTO(route);
     }
 
     @Override
+    public RouteDetailDTO getRouteDetailByOrderId(Long orderId) {
+        LogisticsRoute route = logisticsRouteMapper.selectOne(
+                new LambdaQueryWrapper<LogisticsRoute>().eq(LogisticsRoute::getOrderId, orderId));
+        if (route == null) throw new BusinessException(ResultCode.FAIL.getCode(), "路线不存在");
+        return buildRouteDetailDTO(route);
+    }
+
+    // ----------------------------------------------------------------
+    //  状态变更
+    // ----------------------------------------------------------------
+
+    @Override
     @Transactional
     public LogisticsRoute bindDriver(Long routeId, Long driverId, Long deliveryId) {
-        LogisticsRoute route = routeMapper.selectById(routeId);
-        if (route == null) {
-            throw new BusinessException(ResultCode.FAIL.getCode(), "物流路线不存在");
-        }
+        LogisticsRoute route = getRouteOrThrow(routeId);
         route.setDriverId(driverId);
         route.setDeliveryId(deliveryId);
-        route.setRouteStatus(1);  // 运输中
-        routeMapper.updateById(route);
+        route.setRouteStatus(1);          // 绑定运输员后状态变为：运输中
+        logisticsRouteMapper.updateById(route);
         return route;
     }
 
     @Override
     @Transactional
-    public LogisticsRoute updateRouteStatus(Long routeId, Integer routeStatus) {
-        LogisticsRoute route = routeMapper.selectById(routeId);
-        if (route == null) {
-            throw new BusinessException(ResultCode.FAIL.getCode(), "物流路线不存在");
+    public LogisticsRoute updateRouteStatus(Long routeId, Integer status) {
+        LogisticsRoute route = getRouteOrThrow(routeId);
+        route.setRouteStatus(status);
+        if (status == 2) {
+            route.setActualArrivalTime(new Date()); // 已送达：记录实际到达时间
         }
-        route.setRouteStatus(routeStatus);
-        if (routeStatus == 2) {  // 已送达
-            route.setActualArrivalTime(new Date());
-        }
-        routeMapper.updateById(route);
+        logisticsRouteMapper.updateById(route);
         return route;
     }
 
-    @Override
-    @Transactional
-    public LogisticsRoute updatePlannedRoute(Long routeId, String plannedRouteGeoJson) {
-        LogisticsRoute route = routeMapper.selectById(routeId);
-        if (route == null) {
-            throw new BusinessException(ResultCode.FAIL.getCode(), "物流路线不存在");
-        }
-        route.setPlannedRoute(plannedRouteGeoJson);
-        routeMapper.updateById(route);
-        return route;
-    }
-
-    @Override
-    @Transactional
-    public LogisticsRoute updateAIRoute(Long routeId, String aiSuggestedRouteGeoJson, String aiAnalysis) {
-        LogisticsRoute route = routeMapper.selectById(routeId);
-        if (route == null) {
-            throw new BusinessException(ResultCode.FAIL.getCode(), "物流路线不存在");
-        }
-        route.setAiSuggestedRoute(aiSuggestedRouteGeoJson);
-        route.setAiAnalysis(aiAnalysis);
-        routeMapper.updateById(route);
-        return route;
-    }
+    // ----------------------------------------------------------------
+    //  列表查询
+    // ----------------------------------------------------------------
 
     @Override
     public List<LogisticsRoute> getPendingRoutes() {
-        LambdaQueryWrapper<LogisticsRoute> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(LogisticsRoute::getRouteStatus, 0)
-                .orderByAsc(LogisticsRoute::getCreateTime);
-        return routeMapper.selectList(wrapper);
+        return logisticsRouteMapper.selectList(
+                new LambdaQueryWrapper<LogisticsRoute>()
+                        .eq(LogisticsRoute::getRouteStatus, 0)
+                        .orderByAsc(LogisticsRoute::getCreateTime));
     }
 
     @Override
     public List<LogisticsRoute> getRoutesByDriverId(Long driverId) {
-        LambdaQueryWrapper<LogisticsRoute> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(LogisticsRoute::getDriverId, driverId)
-                .orderByDesc(LogisticsRoute::getCreateTime);
-        return routeMapper.selectList(wrapper);
+        return logisticsRouteMapper.selectList(
+                new LambdaQueryWrapper<LogisticsRoute>()
+                        .eq(LogisticsRoute::getDriverId, driverId)
+                        .orderByDesc(LogisticsRoute::getCreateTime));
     }
 
-    // ---------- 私有方法 ----------
+    // ----------------------------------------------------------------
+    //  私有方法
+    // ----------------------------------------------------------------
 
-    /**
-     * 构建路线详情 DTO
-     */
+    /** 查路线，不存在则抛异常（复用，避免重复代码） */
+    private LogisticsRoute getRouteOrThrow(Long routeId) {
+        LogisticsRoute route = logisticsRouteMapper.selectById(routeId);
+        if (route == null) throw new BusinessException(ResultCode.FAIL.getCode(), "路线不存在");
+        return route;
+    }
+
+    /** 组装路线详情 DTO（路线 + 节点列表 + 近期轨迹 + 状态描述 + 配送员信息） */
     private RouteDetailDTO buildRouteDetailDTO(LogisticsRoute route) {
         RouteDetailDTO dto = new RouteDetailDTO();
         dto.setRoute(route);
-
-        // 查询节点（按顺序）
-        LambdaQueryWrapper<LogisticsNode> nodeWrapper = new LambdaQueryWrapper<>();
-        nodeWrapper.eq(LogisticsNode::getRouteId, route.getId())
-                .orderByAsc(LogisticsNode::getSequenceNo);
-        dto.setNodes(nodeMapper.selectList(nodeWrapper));
-
-        // 查询最近 50 条轨迹
-        dto.setRecentTracks(trackMapper.selectLatestTracks(route.getId(), 50));
-
-        // 当前位置描述
-        dto.setCurrentPositionDesc(route.getCurrentAddress() != null ?
-                route.getCurrentAddress() : route.getStartAddress());
-
-        // 状态描述
+        dto.setNodes(logisticsNodeMapper.selectList(
+                new LambdaQueryWrapper<LogisticsNode>()
+                        .eq(LogisticsNode::getRouteId, route.getId())
+                        .orderByAsc(LogisticsNode::getSequenceNo)));
+        dto.setRecentTracks(logisticsTrackMapper.selectLatestTracks(route.getId(), 50));
         dto.setStatusDesc(getStatusDesc(route.getRouteStatus()));
+
+        // 填充配送员姓名和电话（路线已绑定运输员时）
+        if (route.getDriverId() != null) {
+            try {
+                com.fm.common.result.Result<java.util.Map<String, Object>> driverResult =
+                        driverFeignClient.getDriverByDriverId(route.getDriverId());
+                if (driverResult != null && driverResult.getCode() == 200 && driverResult.getData() != null) {
+                    java.util.Map<String, Object> d = driverResult.getData();
+                    dto.setDriverName(d.get("realName") != null ? d.get("realName").toString() : null);
+                    dto.setDriverPhone(d.get("phone") != null ? d.get("phone").toString() : null);
+                }
+            } catch (Exception e) {
+                // 获取配送员信息失败不影响主流程
+                System.err.println("获取配送员信息失败: " + e.getMessage());
+            }
+        }
 
         return dto;
     }
 
-    /**
-     * 自动创建出发节点和目的地节点
-     */
+    /** 创建路线时自动插入出发节点和目的地节点 */
     private void createDefaultNodes(LogisticsRoute route) {
-        // 出发节点（仓库）
         LogisticsNode startNode = new LogisticsNode();
         startNode.setRouteId(route.getId());
         startNode.setNodeType(0);
         startNode.setNodeName("出发仓库");
         startNode.setNodeAddress(route.getStartAddress());
-        startNode.setLatitude(route.getStartLat());
-        startNode.setLongitude(route.getStartLng());
+        startNode.setLatitude(route.getStartLatitude());
+        startNode.setLongitude(route.getStartLongitude());
         startNode.setSequenceNo(0);
         startNode.setNodeStatus(0);
-        nodeMapper.insert(startNode);
+        logisticsNodeMapper.insert(startNode);
 
-        // 目的地节点
         LogisticsNode endNode = new LogisticsNode();
         endNode.setRouteId(route.getId());
         endNode.setNodeType(2);
         endNode.setNodeName("收货地址");
         endNode.setNodeAddress(route.getEndAddress());
-        endNode.setLatitude(route.getEndLat());
-        endNode.setLongitude(route.getEndLng());
+        endNode.setLatitude(route.getEndLatitude());
+        endNode.setLongitude(route.getEndLongitude());
         endNode.setSequenceNo(99);
         endNode.setNodeStatus(0);
-        nodeMapper.insert(endNode);
+        logisticsNodeMapper.insert(endNode);
     }
 
+    /** 路线状态转中文描述 */
     private String getStatusDesc(Integer status) {
         if (status == null) return "未知";
         return switch (status) {
@@ -318,26 +282,10 @@ public class LogisticsRouteServiceImpl extends ServiceImpl<LogisticsRouteMapper,
         };
     }
 
+    /** 生成路线编号：LR + yyyyMMddHHmmss + 4位随机数 */
     private String generateRouteNo() {
-        String dateTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
-        int random = (int) (Math.random() * 10000);
-        return "LR" + dateTime + String.format("%04d", random);
-    }
-
-    private String listToJson(List<String> list) {
-        if (list == null || list.isEmpty()) return "[]";
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < list.size(); i++) {
-            if (i > 0) sb.append(",");
-            sb.append("\"").append(escapeJson(list.get(i))).append("\"");
-        }
-        sb.append("]");
-        return sb.toString();
-    }
-
-    private String escapeJson(String s) {
-        if (s == null) return "";
-        return s.replace("\\", "\\\\").replace("\"", "\\\"");
+        String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+        int rand = (int) (Math.random() * 10000);
+        return "LR" + time + String.format("%04d", rand);
     }
 }
-

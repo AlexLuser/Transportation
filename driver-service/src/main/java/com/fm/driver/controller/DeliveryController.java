@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -31,9 +32,21 @@ public class DeliveryController {
     @Autowired
     private DriverService driverService;
     
-    /**
-     * 获取待接单订单列表（分页）
-     */
+    @Operation(summary = "进行中的配送", description = "当前司机已接单或运输中的配送；计划路线请调 logistics-service：GET /api/logistics/routes/order/{orderId}")
+    @GetMapping("/in-progress")
+    public Result<List<OrderDelivery>> getInProgressDeliveries(
+            @RequestHeader(value = "userId", required = false) String userIdHeader) {
+        if (!StringUtils.hasText(userIdHeader)) {
+            throw new BusinessException(ResultCode.UNAUTHORIZED);
+        }
+        Long userId = Long.parseLong(userIdHeader);
+        Driver driver = driverService.getDriverByUserId(userId);
+        if (driver == null) {
+            return Result.error("运输员信息不存在，请先完善信息");
+        }
+        return Result.success(deliveryService.listInProgressDeliveries(driver.getId()));
+    }
+
     @Operation(summary = "获取待接单订单列表", description = "获取待接单的订单列表（分页）")
     @GetMapping("/pending")
     public Result<PageResult<OrderDelivery>> getPendingDeliveries(

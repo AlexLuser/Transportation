@@ -32,7 +32,7 @@ public class Order {
 
     private BigDecimal shippingFee; // 运费
 
-    private Integer orderStatus;    // 订单状态：0=待支付，1=已支付，2=待发货，3=已发货，4=已完成，5=已取消
+    private Integer orderStatus;    // 订单状态：0=待支付，1=待发货，2=待揽件，3=派送中，4=已完成，5=已取消
 
     private Integer paymentStatus;  // 支付状态：0=未支付，1=已支付
 
@@ -49,6 +49,8 @@ public class Order {
     private String remark;          // 订单备注
 
     private Long warehouseId;       // 发货仓库ID（下单时扣减库存的仓库，用于物流路线起点）
+
+    private Integer customerDeleted; // 顾客软删除：0=正常，1=已隐藏
 
     private Date createTime;        // 创建时间
 

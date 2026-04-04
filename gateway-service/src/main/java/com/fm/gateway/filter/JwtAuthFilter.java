@@ -121,6 +121,12 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             return true;
         }
         
+        // 顾客地址详情查询（内部只读接口）：shop/driver/admin 创建物流时需要读取收货地址
+        if (path.matches("/api/customers/address/\\d+")) {
+            return "customer".equals(roleCode) || "shop".equals(roleCode)
+                    || "driver".equals(roleCode) || "admin".equals(roleCode);
+        }
+
         // 顾客服务：只允许customer角色访问
         if (path.startsWith("/api/customers")) {
             return "customer".equals(roleCode);

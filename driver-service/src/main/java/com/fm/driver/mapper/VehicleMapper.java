@@ -11,3 +11,18 @@ import org.apache.ibatis.annotations.Mapper;
 public interface VehicleMapper extends BaseMapper<Vehicle> {
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

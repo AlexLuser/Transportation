@@ -48,7 +48,7 @@ public class ShopController {
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
         Long userId = Long.parseLong(userIdHeader);
-        
+
         Shop shop = shopService.getShopById(id);
         if (shop == null) {
             return Result.error("商户信息不存在");
@@ -118,6 +118,23 @@ public class ShopController {
         return Result.success(shop);
     }
     
+    /**
+     * 【内部接口】根据 userId 查询商户信息
+     * GET /api/shops/internal/user/{userId}
+     * 仅供服务间调用，根据 user.id 返回商户业务主体信息
+     */
+    @Operation(summary = "内部：根据userId查询商户", description = "服务间内部调用，根据 user.id 返回商户业务主体信息")
+    @GetMapping("/internal/user/{userId}")
+    public Result<Shop> getShopByUserId(
+            @Parameter(description = "用户ID（user.id）", required = true)
+            @PathVariable Long userId) {
+        Shop shop = shopService.getShopByUserId(userId);
+        if (shop == null) {
+            return Result.error("商户信息不存在");
+        }
+        return Result.success(shop);
+    }
+
     /**
      * 删除商户信息
      * @param userIdHeader 用户ID（从请求头获取）

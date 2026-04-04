@@ -2,7 +2,10 @@ package com.fm.order.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fm.common.dto.PageResult;
 import com.fm.common.exception.BusinessException;
 import com.fm.common.result.Result;
 import com.fm.common.result.ResultCode;
@@ -12,7 +15,6 @@ import com.fm.order.entity.Order;
 import com.fm.order.entity.OrderItem;
 import com.fm.order.feign.CustomerFeignClient;
 import com.fm.order.feign.DriverFeignClient;
-import com.fm.order.feign.LogisticsFeignClient;
 import com.fm.order.feign.ShopFeignClient;
 import com.fm.order.mapper.OrderItemMapper;
 import com.fm.order.mapper.OrderMapper;
@@ -30,7 +32,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * 订单服务实现类
@@ -54,50 +55,29 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Autowired
     private DriverFeignClient driverFeignClient;
 
-    @Autowired
-    private LogisticsFeignClient logisticsFeignClient;
-
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     @Transactional
     public OrderDetailDTO createOrder(Long customerId, CreateOrderRequestDTO request) {
-        // 1. 验证顾客信息
-        Result<Map<String, Object>> customerResult = customerFeignClient.getCustomer(
-                customerId, customerId.toString(), "customer");
-        if (customerResult.getCode() != 200 || customerResult.getData() == null) {
-            throw new BusinessException(ResultCode.FAIL.getCode(), "顾客信息不存在");
-        }
+        // 注意：customerId 已由 Controller 层通过内部接口转换（userId → customerId），此处直接使用。
 
-        // 2. 验证收货地址（获取地址列表，然后验证addressId是否存在）
-        Result<List<Map<String, Object>>> addressResult = customerFeignClient.getAddresses(
-                customerId, customerId.toString(), "customer");
-        if (addressResult.getCode() != 200 || addressResult.getData() == null) {
-            throw new BusinessException(ResultCode.FAIL.getCode(), "无法获取收货地址列表");
-        }
-
+        // 1. 验证收货地址（通过 addressId 直接查询，并校验归属）
         Long requestAddressId = request.getAddressId();
         if (requestAddressId == null) {
             throw new BusinessException(ResultCode.FAIL.getCode(), "收货地址不能为空");
         }
-
-        boolean addressMatched = false;
-        for (Map<String, Object> addr : addressResult.getData()) {
-            if (addr == null || addr.get("id") == null) {
-                continue;
-            }
-            try {
-                Long addrId = Long.valueOf(addr.get("id").toString());
-                if (Objects.equals(addrId, requestAddressId)) {
-                    addressMatched = true;
-                    break;
-                }
-            } catch (Exception ignore) {
-                // 忽略异常数据，继续匹配下一条
-            }
+        Result<Map<String, Object>> addrByIdResult = customerFeignClient.getAddressById(requestAddressId);
+        if (addrByIdResult.getCode() != 200 || addrByIdResult.getData() == null) {
+            throw new BusinessException(ResultCode.FAIL.getCode(), "收货地址不存在");
         }
-        if (!addressMatched) {
-            throw new BusinessException(ResultCode.FAIL.getCode(), "收货地址不存在或不属于当前用户");
+        Map<String, Object> addrData = addrByIdResult.getData();
+        // 校验地址归属：地址的 customerId 必须与当前登录顾客一致
+        if (addrData.get("customerId") != null) {
+            Long addrCustomerId = Long.valueOf(addrData.get("customerId").toString());
+            if (!addrCustomerId.equals(customerId)) {
+                throw new BusinessException(ResultCode.FAIL.getCode(), "收货地址不属于当前顾客");
+            }
         }
 
         // 3. 验证商品信息并计算金额
@@ -201,8 +181,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setShippingFee(BigDecimal.ZERO); // 运费暂时为0
         order.setWarehouseId(firstWarehouseId);  // 发货仓库（物流路线起点）
         order.setTotalAmount(productAmount.add(order.getShippingFee()));
-        order.setOrderStatus(0); // 待支付
-        order.setPaymentStatus(0); // 未支付
+        // 毕设：无真实支付流程，下单即视为已支付（paymentStatus=1）、进入待发货状态（orderStatus=1）
+        order.setOrderStatus(1);   // 待发货
+        order.setPaymentStatus(1); // 已支付
+        order.setPaymentTime(new Date());
         order.setRemark(request.getRemark());
 
         orderMapper.insert(order);
@@ -243,6 +225,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     public List<Order> getOrdersByCustomerId(Long customerId) {
         LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Order::getCustomerId, customerId)
+                .ne(Order::getCustomerDeleted, 1)
                 .orderByDesc(Order::getCreateTime);
         return orderMapper.selectList(wrapper);
     }
@@ -266,8 +249,16 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         LambdaUpdateWrapper<Order> wrapper = new LambdaUpdateWrapper<>();
         wrapper.eq(Order::getId, orderId).set(Order::getOrderStatus, orderStatus);
 
-        // 根据状态设置相应的时间字段
-        if (orderStatus == 3) { // 已发货
+        // 订单状态：0=待支付，1=待发货，2=待揽件（商家已发货、待运输员接单），3=派送中，4=已完成，5=已取消
+        if (orderStatus == 2) { // 待揽件（商户发货）
+            // B3：发货前置校验 - 订单必须是已支付(paymentStatus=1)且处于待发货状态(orderStatus=1)
+            if (!Integer.valueOf(1).equals(order.getPaymentStatus())) {
+                throw new BusinessException(ResultCode.FAIL.getCode(), "订单未支付，不能发货");
+            }
+            if (!Integer.valueOf(1).equals(order.getOrderStatus())) {
+                throw new BusinessException(ResultCode.FAIL.getCode(), "订单当前状态不允许发货（当前状态：" + order.getOrderStatus() + "，需为待发货:1）");
+            }
+
             wrapper.set(Order::getShippingTime, new Date());
             
             // 创建配送记录
@@ -309,46 +300,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                         System.err.println("创建配送记录失败: " + deliveryResult.getMessage());
                     }
 
-                    // 调用物流服务创建物流路线（发货地=仓库，收货地=买家地址）
-                    try {
-                        String startAddress = "未知仓库地址";
-                        Double startLat = null;
-                        Double startLng = null;
-                        if (order.getWarehouseId() != null) {
-                            Result<Map<String, Object>> warehouseResult =
-                                    shopFeignClient.getWarehouseById(order.getWarehouseId());
-                            if (warehouseResult.getCode() == 200 && warehouseResult.getData() != null) {
-                                Map<String, Object> wh = warehouseResult.getData();
-                                StringBuilder whAddr = new StringBuilder();
-                                if (wh.get("province") != null) whAddr.append(wh.get("province"));
-                                if (wh.get("city") != null) whAddr.append(wh.get("city"));
-                                if (wh.get("district") != null) whAddr.append(wh.get("district"));
-                                if (wh.get("detailAddress") != null) whAddr.append(wh.get("detailAddress"));
-                                startAddress = whAddr.toString();
-                                if (wh.get("latitude") != null) {
-                                    startLat = Double.valueOf(wh.get("latitude").toString());
-                                }
-                                if (wh.get("longitude") != null) {
-                                    startLng = Double.valueOf(wh.get("longitude").toString());
-                                }
-                            }
-                        }
-                        java.util.Map<String, Object> routeRequest = new java.util.HashMap<>();
-                        routeRequest.put("orderId", orderId);
-                        routeRequest.put("warehouseId", order.getWarehouseId());
-                        routeRequest.put("startAddress", startAddress);
-                        routeRequest.put("startLat", startLat);
-                        routeRequest.put("startLng", startLng);
-                        routeRequest.put("endAddress", fullAddress.toString());
-                        routeRequest.put("receiverName", receiverName);
-                        routeRequest.put("receiverPhone", receiverPhone);
-                        Result<Map<String, Object>> routeResult = logisticsFeignClient.createRoute(routeRequest);
-                        if (routeResult.getCode() != 200) {
-                            System.err.println("创建物流路线失败: " + routeResult.getMessage());
-                        }
-                    } catch (Exception le) {
-                        System.err.println("创建物流路线异常: " + le.getMessage());
-                    }
+                    // 物流路线由商户端在订单状态更新成功后调用 logistics-service 创建（含 LLM 规划与前端展示），
+                    // 此处不再重复调用，避免与网关并发产生双次规划与幂等冲突。
                 } else {
                     System.err.println("获取地址信息失败，无法创建配送记录");
                 }
@@ -357,10 +310,35 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 System.err.println("创建配送记录异常: " + e.getMessage());
                 e.printStackTrace();
             }
+        } else if (orderStatus == 3) { // 派送中（运输员接单后）
+            if (!Integer.valueOf(2).equals(order.getOrderStatus())) {
+                throw new BusinessException(ResultCode.FAIL.getCode(),
+                        "订单当前状态不允许变为派送中（需为待揽件:2，当前:" + order.getOrderStatus() + "）");
+            }
         } else if (orderStatus == 4) { // 已完成
+            if (!Integer.valueOf(3).equals(order.getOrderStatus())) {
+                throw new BusinessException(ResultCode.FAIL.getCode(),
+                        "订单当前状态不允许完成（需为派送中:3，当前:" + order.getOrderStatus() + "）");
+            }
             wrapper.set(Order::getCompleteTime, new Date());
         }
 
+        return orderMapper.update(null, wrapper) > 0;
+    }
+
+    @Override
+    @Transactional
+    public boolean reopenOrderToPendingPickup(Long orderId) {
+        Order order = orderMapper.selectById(orderId);
+        if (order == null) {
+            throw new BusinessException(ResultCode.FAIL.getCode(), "订单不存在");
+        }
+        if (!Integer.valueOf(3).equals(order.getOrderStatus())) {
+            throw new BusinessException(ResultCode.FAIL.getCode(),
+                    "仅派送中订单可回到待揽件（当前:" + order.getOrderStatus() + "）");
+        }
+        LambdaUpdateWrapper<Order> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(Order::getId, orderId).set(Order::getOrderStatus, 2);
         return orderMapper.update(null, wrapper) > 0;
     }
 
@@ -372,7 +350,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             throw new BusinessException(ResultCode.FAIL.getCode(), "订单不存在");
         }
 
-        // 只有待支付和已支付的订单可以取消
+        // 只有待支付（0）和待发货（1）的订单可以取消
         if (order.getOrderStatus() != 0 && order.getOrderStatus() != 1) {
             throw new BusinessException(ResultCode.FAIL.getCode(), "当前订单状态不允许取消");
         }
@@ -405,6 +383,44 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 .set(Order::getPaymentTime, new Date());
 
         return orderMapper.update(null, wrapper) > 0;
+    }
+
+    @Override
+    @Transactional
+    public boolean deleteOrderByCustomer(Long orderId, Long customerId) {
+        Order order = orderMapper.selectById(orderId);
+        if (order == null) {
+            throw new BusinessException(ResultCode.FAIL.getCode(), "订单不存在");
+        }
+        if (!order.getCustomerId().equals(customerId)) {
+            throw new BusinessException(ResultCode.FAIL.getCode(), "无权操作该订单");
+        }
+        if (order.getOrderStatus() != 5) {
+            throw new BusinessException(ResultCode.FAIL.getCode(), "只有已取消的订单可以删除");
+        }
+        LambdaUpdateWrapper<Order> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(Order::getId, orderId)
+                .set(Order::getCustomerDeleted, 1);
+        return orderMapper.update(null, wrapper) > 0;
+    }
+
+    @Override
+    public PageResult<Order> getAllOrders(Long current, Long size, Integer status) {
+        Page<Order> page = new Page<>(current, size);
+        LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
+        if (status != null) {
+            wrapper.eq(Order::getOrderStatus, status);
+        }
+        wrapper.orderByDesc(Order::getCreateTime);
+        IPage<Order> result = orderMapper.selectPage(page, wrapper);
+        return new PageResult<>(result.getCurrent(), result.getSize(), result.getTotal(), result.getRecords());
+    }
+
+    @Override
+    public Order getOrderByNo(String orderNo) {
+        LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Order::getOrderNo, orderNo);
+        return orderMapper.selectOne(wrapper);
     }
 
     /**

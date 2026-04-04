@@ -1,0 +1,19 @@
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": 3,
+    "routeId": 1,
+    "driverId": 1,
+    "latitude": 31.2256,
+    "longitude": 121.5350,
+    "altitude": null,
+    "speed": 42.0,
+    "heading": 320.0,
+    "accuracy": 4.0,
+    "address": "上海市浦东新区世纪大道附近",
+    "trackTime": "2026-03-13T12:45:00.000+08:00",
+    "createTime": "2026-03-13T12:45:01.000+08:00"
+  }
+}
+
