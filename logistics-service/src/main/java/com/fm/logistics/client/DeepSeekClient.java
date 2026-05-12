@@ -1,5 +1,7 @@
 package com.fm.logistics.client;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fm.logistics.dto.LlmDecisionResult;
 import org.slf4j.Logger;
@@ -19,6 +21,7 @@ import java.util.*;
  *
  * 使用前请在 application.yml 中配置：
  *   deepseek.api-key: 你的API密钥（从 platform.deepseek.com 获取）
+ *   deepseek.read-timeout-ms: 读取超时（费用校准等大输出常需 30～90s，默认 180000）
  */
 @Component
 public class DeepSeekClient {
@@ -36,16 +39,19 @@ public class DeepSeekClient {
 
     private final ObjectMapper objectMapper;
 
-    // RestTemplate 在构造时创建，避免使用 @PostConstruct
     private final RestTemplate restTemplate;
 
     @Autowired
-    public DeepSeekClient(ObjectMapper objectMapper) {
+    public DeepSeekClient(
+            ObjectMapper objectMapper,
+            @Value("${deepseek.connect-timeout-ms:10000}") int connectTimeoutMs,
+            @Value("${deepseek.read-timeout-ms:180000}") int readTimeoutMs) {
         this.objectMapper = objectMapper;
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(5000);
-        factory.setReadTimeout(15000);
+        factory.setConnectTimeout(Math.max(1000, connectTimeoutMs));
+        factory.setReadTimeout(Math.max(5000, readTimeoutMs));
         this.restTemplate = new RestTemplate(factory);
+        log.info("[DeepSeek] HTTP connectTimeout={}ms readTimeout={}ms", connectTimeoutMs, readTimeoutMs);
     }
 
     /**
@@ -57,15 +63,32 @@ public class DeepSeekClient {
      * @return LLM 返回的 JSON 字符串
      */
     public String callApi(String systemPrompt, String userPrompt) throws Exception {
-        // 构建请求体（兼容 OpenAI 格式）
+        return callApi(systemPrompt, userPrompt, 800, true);
+    }
+
+    /**
+     * @param maxTokens    输出上限；边费用校准等长 JSON 需更大（如 4096），避免截断后解析失败
+     * @param jsonObjectMode 为 true 时等价原行为，要求模型返回 JSON 对象根节点
+     */
+    public String callApi(String systemPrompt, String userPrompt, int maxTokens, boolean jsonObjectMode) throws Exception {
+        return callApi(systemPrompt, userPrompt, maxTokens, jsonObjectMode, 0.1);
+    }
+
+    /**
+     * @param temperature 采样温度；结构化数值任务宜偏低（如 0.1），解读类可略高（如 0.45～0.6）
+     */
+    public String callApi(String systemPrompt, String userPrompt, int maxTokens, boolean jsonObjectMode,
+                          double temperature) throws Exception {
         Map<String, Object> requestBody = new LinkedHashMap<>();
         requestBody.put("model", model);
-        requestBody.put("temperature", 0.1);   // 低温度保证输出稳定可解析
-        requestBody.put("max_tokens", 800);
+        requestBody.put("temperature", Math.max(0.0, Math.min(2.0, temperature)));
+        requestBody.put("max_tokens", Math.max(256, maxTokens));
 
-        Map<String, String> responseFormat = new HashMap<>();
-        responseFormat.put("type", "json_object");
-        requestBody.put("response_format", responseFormat);
+        if (jsonObjectMode) {
+            Map<String, String> responseFormat = new HashMap<>();
+            responseFormat.put("type", "json_object");
+            requestBody.put("response_format", responseFormat);
+        }
 
         List<Map<String, String>> messages = new ArrayList<>();
         Map<String, String> sysMsg = new LinkedHashMap<>();
@@ -80,14 +103,13 @@ public class DeepSeekClient {
 
         requestBody.put("messages", messages);
 
-        // 构建请求头
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("Authorization", "Bearer " + apiKey);
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
-        log.info("[DeepSeek] 发送请求 model={}, promptLen={}", model, userPrompt.length());
+        log.info("[DeepSeek] 发送请求 model={}, promptLen={}, maxTokens={}", model, userPrompt.length(), maxTokens);
 
         ResponseEntity<Map> response = restTemplate.postForEntity(apiUrl, entity, Map.class);
 
@@ -108,6 +130,34 @@ public class DeepSeekClient {
         log.info("[DeepSeek] 响应成功，内容长度={}", content != null ? content.length() : 0);
         log.debug("[DeepSeek] 响应内容: {}", content);
         return content;
+    }
+
+    /**
+     * 统一取出助手正文：{@link #callApi} 已返回 {@code message.content}；
+     * 若传入整段 Chat Completions JSON（含 {@code choices}），也会解包出 content。
+     * <p>排查解析失败：将 {@code com.fm.logistics.client.DeepSeekClient} 设为 DEBUG，查看上方法打印的完整 content。</p>
+     */
+    public String unwrapAssistantContent(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        String trimmed = raw.trim();
+        try {
+            JsonNode root = objectMapper.readTree(trimmed);
+            JsonNode choices = root.get("choices");
+            if (choices != null && choices.isArray() && choices.size() > 0) {
+                JsonNode first = choices.get(0);
+                if (first != null) {
+                    String inner = first.path("message").path("content").asText("");
+                    if (!inner.isBlank()) {
+                        return inner;
+                    }
+                }
+            }
+        } catch (JsonProcessingException e) {
+            return trimmed;
+        }
+        return trimmed;
     }
 
     /**

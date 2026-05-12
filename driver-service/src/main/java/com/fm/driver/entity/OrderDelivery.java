@@ -55,7 +55,28 @@ public class OrderDelivery {
     
     /** 配送备注 */
     private String remark;
-    
+
+    // ── Hub-and-Spoke 扩展字段 ──────────────────────────────────
+    /**
+     * 配送段类型：
+     *   0 = 完整单订单（默认，兼容原有流程）
+     *   1 = 干线（仓库 → Hub，目的地是 Hub）
+     *   2 = 末端（Hub → 客户）
+     */
+    private Integer segmentType;
+
+    /** 所属批次ID */
+    private Long batchId;
+
+    /** 中转站ID（干线司机的目标 Hub） */
+    private Long hubId;
+
+    /**
+     * 关联的物流路线ID（干线路线接单时使用，末端/普通路线通过 orderId 查路线）
+     * 干线路线 orderId=null，必须通过 routeId 直接绑定
+     */
+    private Long routeId;
+
     /** 创建时间 */
     private Date createTime;
     

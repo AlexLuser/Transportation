@@ -7,6 +7,9 @@ import com.fm.shop.entity.Shop;
 import com.fm.shop.mapper.ShopMapper;
 import com.fm.shop.service.ShopService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
@@ -20,6 +23,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements Sh
     private ShopMapper shopMapper;
 
     @Override
+    @Cacheable(value = "shopByUser", key = "#userId", unless = "#result == null")
     public Shop getShopByUserId(Long userId) {
         LambdaQueryWrapper<Shop> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Shop::getUserId, userId);
@@ -27,17 +31,20 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements Sh
     }
 
     @Override
+    @Cacheable(value = "shopById", key = "#shopId", unless = "#result == null")
     public Shop getShopById(Long shopId) {
         return shopMapper.selectById(shopId);
     }
 
     @Override
+    @Caching(evict = {
+        @CacheEvict(value = "shopById",   key = "#shop.id",     condition = "#shop.id != null"),
+        @CacheEvict(value = "shopByUser", key = "#shop.userId", condition = "#shop.userId != null")
+    })
     public Shop saveOrUpdateShop(Shop shop) {
         if (shop.getId() == null) {
-            // 新增商户
             shopMapper.insert(shop);
         } else {
-            // 更新商户
             shopMapper.updateById(shop);
         }
         return shop;
@@ -49,6 +56,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements Sh
     }
 
     @Override
+    @CacheEvict(value = "shopById", key = "#shopId")
     public boolean updateShopStatus(Long shopId, Integer status) {
         LambdaUpdateWrapper<Shop> wrapper = new LambdaUpdateWrapper<>();
         wrapper.eq(Shop::getId, shopId).set(Shop::getStatus, status);
@@ -56,9 +64,8 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements Sh
     }
 
     @Override
+    @CacheEvict(value = "shopById", key = "#shopId")
     public boolean deleteShop(Long shopId) {
-        // 注意：删除商户前，应该先删除关联的商品信息
-        // 这里只删除商户信息，商品的级联删除需要在业务层处理
         return shopMapper.deleteById(shopId) > 0;
     }
 }

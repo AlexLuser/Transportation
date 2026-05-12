@@ -67,6 +67,21 @@ public class LogisticsRouteController {
     }
 
     /**
+     * 查询订单全程物流追踪（所有路线段，按时间升序）
+     * 供顾客、商家、管理员的订单详情页展示完整物流流程。
+     */
+    @Operation(summary = "查询订单全程物流追踪")
+    @GetMapping("/order/{orderId}/journey")
+    public Result<List<RouteDetailDTO>> getOrderJourney(
+            @RequestHeader(value = "userId", required = false) String userIdHeader,
+            @Parameter(description = "订单ID") @PathVariable Long orderId) {
+        if (!StringUtils.hasText(userIdHeader)) {
+            throw new BusinessException(ResultCode.UNAUTHORIZED);
+        }
+        return Result.success(routeService.getOrderJourney(orderId));
+    }
+
+    /**
      * 按路线ID查询详情
      */
     @Operation(summary = "按路线ID查询详情")
@@ -164,6 +179,20 @@ public class LogisticsRouteController {
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
         return Result.success(routeService.getRoutesByDriverId(driverId));
+    }
+
+    /**
+     * 查询批次下所有路线段（干线+末端，Hub-and-Spoke用）
+     */
+    @Operation(summary = "查询批次路线段列表", description = "返回批次下干线路线(segment_type=1)和所有末端路线(segment_type=2)")
+    @GetMapping("/batch/{batchId}")
+    public Result<List<LogisticsRoute>> getRoutesByBatch(
+            @RequestHeader(value = "userId", required = false) String userIdHeader,
+            @PathVariable Long batchId) {
+        if (!StringUtils.hasText(userIdHeader)) {
+            throw new BusinessException(ResultCode.UNAUTHORIZED);
+        }
+        return Result.success(routeService.getRoutesByBatchId(batchId));
     }
 }
 

@@ -3,6 +3,7 @@ package com.fm.auth.controller;
 import com.fm.auth.service.AuthService;
 import com.fm.common.dto.LoginRequestDTO;
 import com.fm.common.dto.LoginResponseDTO;
+import com.fm.common.dto.RegisterRequestDTO;
 import com.fm.common.result.Result;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -40,6 +41,17 @@ public class AuthController {
     @PostMapping("/logout")
     public Result<Void> logout() {
         authService.logout();
+        return Result.success();
+    }
+
+    /**
+     * 用户注册（顾客直接通过；商户/司机需管理员审核）
+     * RESTful: POST /api/auth/register
+     */
+    @Operation(summary = "用户注册", description = "支持顾客、商户、司机三种角色注册")
+    @PostMapping("/register")
+    public Result<Void> register(@RequestBody RegisterRequestDTO registerRequest) {
+        authService.register(registerRequest);
         return Result.success();
     }
 }

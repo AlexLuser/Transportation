@@ -20,6 +20,10 @@
                         <el-icon><User /></el-icon>
                         <span>个人信息</span>
                     </el-menu-item>
+                    <el-menu-item index="/driver/home/gps-test">
+                        <el-icon><Location /></el-icon>
+                        <span>定位测试</span>
+                    </el-menu-item>
                 </el-menu>
             </el-aside>
             <el-container>
@@ -56,7 +60,7 @@
     import { getInProgressDeliveries } from '@/api/driver';
     import { router } from '@/router';
     import { useUserStore } from '@/stores/userStore';
-    import { Van, List, User, Guide } from '@element-plus/icons-vue';
+    import { Van, List, User, Guide, Location } from '@element-plus/icons-vue';
 
     const userStore = useUserStore();
     const route = useRoute();

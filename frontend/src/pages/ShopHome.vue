@@ -4,21 +4,25 @@
             <el-aside width="200px">
                 <div class="aside-logo">智能物流</div>
                 <el-menu router :default-active="$route.path">
-                    <el-menu-item index="/shop/home/products">
-                        <el-icon><ShoppingBag /></el-icon>
-                        <span>商铺管理</span>
+                    <el-menu-item index="/merchant/home/products">
+                        <el-icon><Box /></el-icon>
+                        <span>货物管理</span>
                     </el-menu-item>
-                    <el-menu-item index="/shop/home/orders">
+                    <el-menu-item index="/merchant/home/orders">
                         <el-icon><List /></el-icon>
-                        <span>订单管理</span>
+                        <span>发货订单</span>
                     </el-menu-item>
-                    <el-menu-item index="/shop/home/stock">
+                    <el-menu-item index="/merchant/home/stock">
                         <el-icon><Van /></el-icon>
                         <span>库存管理</span>
                     </el-menu-item>
-                    <el-menu-item index="/shop/home/profile">
+                    <el-menu-item index="/merchant/home/warehouse">
+                        <el-icon><OfficeBuilding /></el-icon>
+                        <span>仓储管理</span>
+                    </el-menu-item>
+                    <el-menu-item index="/merchant/home/profile">
                         <el-icon><User /></el-icon>
-                        <span>商铺信息</span>
+                        <span>企业信息</span>
                     </el-menu-item>
                 </el-menu>
             </el-aside>
@@ -26,7 +30,7 @@
                 <el-header>
                     <span class="header-title">智能物流管理系统</span>
                     <div class="header-right">
-                        <el-tag type="warning" size="small" effect="plain" class="role-tag">商户</el-tag>
+                        <el-tag type="warning" size="small" effect="plain" class="role-tag">货主</el-tag>
                         <span class="header-user">{{ userStore.userInfo?.username }}</span>
                         <el-button type="danger" plain size="small" @click="handleLogout">退出登录</el-button>
                     </div>
@@ -43,7 +47,7 @@
     import { logout } from '@/api/auth';
     import { router } from '@/router';
     import { useUserStore } from '@/stores/userStore';
-    import { ShoppingBag, List, User, Van } from '@element-plus/icons-vue';
+    import { Box, List, User, Van, OfficeBuilding } from '@element-plus/icons-vue';
 
     const userStore = useUserStore();
 

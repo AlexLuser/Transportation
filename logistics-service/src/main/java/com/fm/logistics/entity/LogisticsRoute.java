@@ -7,65 +7,131 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import java.util.Date;
 import lombok.Data;
 
+/**
+ * 物流路线表实体
+ *
+ * 兼容三种路线类型（segment_type）：
+ *   0 = 独立单订单路线（orderId 必填，stop_count=1，waypoints=null）
+ *   1 = 干线路线（仓库 → Hub，orderId=null，stop_count=1）
+ *   2 = 末端路线（Hub/仓库 → 客户，单订单时 orderId 必填；多停靠时 orderId=null，
+ *                stop_count>1，waypoints 存有序停靠点列表）
+ */
 @Data
 @TableName("logistics_route")
 public class LogisticsRoute {
-    /*主键*/
+
     @TableId(type = IdType.AUTO)
     private Long id;
-    /*物流单号*/
+
+    /** 路线编号（LR+yyyyMMddHHmmss+4位随机） */
     private String routeNo;
-    /*订单ID*/
+
+    /**
+     * 关联订单ID
+     *   单订单路线（type=0/2,stop=1）：具体订单ID
+     *   多停靠末端路线（type=2,stop>1）：null，详见 waypoints
+     *   干线路线（type=1）：null
+     */
     private Long orderId;
-    /*配送ID*/
+
+    /** 关联配送记录ID（接单后绑定） */
     private Long deliveryId;
-    /*运输员ID*/
+
+    /** 运输员ID（接单后绑定） */
     private Long driverId;
-    /*仓库ID*/
+
+    /** 出发仓库ID */
     private Long warehouseId;
-    /*出发地信息*/
+
+    // ── Hub-and-Spoke 字段 ───────────────────────────────────────
+
+    /** 所属批次ID（null 表示单订单独立模式） */
+    private Long batchId;
+
+    /**
+     * 路线段类型：
+     *   0 = 独立单订单
+     *   1 = 干线（仓库→Hub，GraphHopper规划）
+     *   2 = 末端（Hub→客户，GraphHopper规划）
+     *   3 = 跨城干线（Hub→Hub，直线虚拟路线，不经GraphHopper）
+     */
+    private Integer segmentType;
+
+    /** 中转站ID（干线=目标Hub，末端=起点Hub） */
+    private Long hubId;
+
+    /** 关联跨城干线批次ID（segmentType=3 时有值） */
+    private Long interCityBatchId;
+
+    // ── 多停靠末端路线分组字段（segment_type=2 时有效）───────────
+
+    /** 批次内末端分组编号（0,1,2...），同一组由一名司机完成 */
+    private Integer groupIndex;
+
+    /** 本路线停靠点数（1=单订单，>1=多停靠末端路线） */
+    private Integer stopCount;
+
+    /**
+     * 多停靠点有序列表（JSON字符串，stop_count>1 时有效）
+     * 格式：[{seq,orderId,address,lat,lng,receiverName,receiverPhone}, ...]
+     */
+    private String waypoints;
+
+    // ── 出发地信息 ───────────────────────────────────────────────
+
+    @TableField("start_address")
     private String startAddress;
-    /*出发地纬度（DB列名 start_lat）*/
+
     @TableField("start_lat")
     private Double startLatitude;
-    /*出发地经度（DB列名 start_lng）*/
+
     @TableField("start_lng")
     private Double startLongitude;
-    /*目的地信息*/
+
+    // ── 目的地信息（多停靠末端路线 = 最后一个停靠点）────────────
+
+    @TableField("end_address")
     private String endAddress;
-    /*目的地纬度（DB列名 end_lat）*/
+
     @TableField("end_lat")
     private Double endLatitude;
-    /*目的地经度（DB列名 end_lng）*/
+
     @TableField("end_lng")
     private Double endLongitude;
-    /*当前位置纬度（DB列名 current_lat）*/
+
+    // ── 实时位置 ─────────────────────────────────────────────────
+
     @TableField("current_lat")
     private Double currentLatitude;
-    /*当前位置经度（DB列名 current_lng）*/
+
     @TableField("current_lng")
     private Double currentLongitude;
-    /*当前位置描述*/
+
     private String currentAddress;
-    /*最后一次位置更新时间*/
     private Date lastTrackTime;
-    /*路线状态*/
+
+    // ── 状态 & 时间 ──────────────────────────────────────────────
+
+    /** -1=待激活，0=待出发，1=运输中，2=已送达，3=异常 */
     private Integer routeStatus;
 
-    /*预计到达时间*/
     private Date estimatedArrivalTime;
-    /*实际到达时间*/
     private Date actualArrivalTime;
-    /*计划路线*/
+
+    /** 计划路线（GeoJSON LineString，由 GraphHopper 生成） */
     private String plannedRoute;
-    /*收货人姓名*/
+
+    /**
+     * 收货人姓名（单订单路线快照；多停靠末端路线为null，收货人信息见 waypoints/batch_item）
+     */
     private String receiverName;
-    /*收货人电话*/
+
+    /**
+     * 收货人电话（单订单路线快照；多停靠末端路线为null）
+     */
     private String receiverPhone;
-    /*备注*/
+
     private String remark;
-    /*创建时间*/
     private Date createTime;
-    /*更新时间*/
     private Date updateTime;
 }

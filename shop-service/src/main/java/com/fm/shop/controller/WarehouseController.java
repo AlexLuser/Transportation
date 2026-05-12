@@ -5,6 +5,7 @@ import com.fm.common.result.Result;
 import com.fm.common.result.ResultCode;
 import com.fm.shop.entity.Warehouse;
 import com.fm.shop.service.WarehouseService;
+import com.fm.shop.service.WarehouseShopService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,6 +29,9 @@ public class WarehouseController {
     
     @Autowired
     private WarehouseService warehouseService;
+
+    @Autowired
+    private WarehouseShopService warehouseShopService;
     
     /**
      * 获取仓库列表
@@ -57,6 +61,53 @@ public class WarehouseController {
         return Result.success(warehouse);
     }
     
+    /**
+     * 新建仓库
+     */
+    @Operation(summary = "新建仓库", description = "创建新仓库（管理员操作）")
+    @PostMapping
+    public Result<Warehouse> createWarehouse(
+            @RequestHeader(value = "userId", required = false) String userIdHeader,
+            @RequestBody Warehouse warehouse) {
+        if (!StringUtils.hasText(userIdHeader)) {
+            throw new BusinessException(ResultCode.UNAUTHORIZED);
+        }
+        Warehouse saved = warehouseService.saveOrUpdateWarehouse(warehouse);
+        return Result.success(saved);
+    }
+
+    /**
+     * 更新仓库信息
+     */
+    @Operation(summary = "更新仓库信息", description = "更新指定仓库的基本信息")
+    @PutMapping("/{id}")
+    public Result<Warehouse> updateWarehouse(
+            @RequestHeader(value = "userId", required = false) String userIdHeader,
+            @PathVariable Long id,
+            @RequestBody Warehouse warehouse) {
+        if (!StringUtils.hasText(userIdHeader)) {
+            throw new BusinessException(ResultCode.UNAUTHORIZED);
+        }
+        warehouse.setId(id);
+        Warehouse updated = warehouseService.saveOrUpdateWarehouse(warehouse);
+        return Result.success(updated);
+    }
+
+    /**
+     * 删除仓库
+     */
+    @Operation(summary = "删除仓库", description = "删除指定仓库")
+    @DeleteMapping("/{id}")
+    public Result<Boolean> deleteWarehouse(
+            @RequestHeader(value = "userId", required = false) String userIdHeader,
+            @PathVariable Long id) {
+        if (!StringUtils.hasText(userIdHeader)) {
+            throw new BusinessException(ResultCode.UNAUTHORIZED);
+        }
+        boolean success = warehouseService.deleteWarehouse(id);
+        return Result.success(success);
+    }
+
     /**
      * 修改仓库容量
      * @param userIdHeader 用户ID（从请求头获取）

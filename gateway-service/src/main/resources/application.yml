@@ -44,7 +44,7 @@ spring:
         - id: shop-service
           uri: lb://shop-service
           predicates:
-            - Path=/api/shops/**,/api/products/**,/api/warehouses/**,/api/stocks/**,/api/mall/**
+            - Path=/api/shops/**,/api/products/**,/api/warehouses/**,/api/stocks/**,/api/mall/**,/api/warehouse-shops/**,/api/warehouse-locations/**,/api/inbound-orders/**,/api/outbound-orders/**,/api/inventory-checks/**,/api/transfer-orders/**
           filters:
             - StripPrefix=0
         

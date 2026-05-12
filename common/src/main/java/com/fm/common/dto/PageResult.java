@@ -1,6 +1,7 @@
 package com.fm.common.dto;
 
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
@@ -8,6 +9,7 @@ import java.util.List;
  * 用于封装分页查询的结果
  */
 @Data
+@NoArgsConstructor
 public class PageResult<T> {
     /** 当前页码 */
     private Long current;

@@ -134,3 +134,17 @@ export const cancelDelivery = (id: number, cancelReason: string) => {
         data: { cancelReason },
     });
 };
+
+/** 逐站送达（多停靠末端路线专用） */
+export const completeDeliveryStop = (deliveryId: number, orderId: number) => {
+    return request({
+        url: `/drivers/deliveries/${deliveryId}/complete-stop`,
+        method: 'PUT',
+        data: { orderId },
+    });
+};
+
+/** 获取末端路线的停靠点列表（含 itemStatus）*/
+export const getRouteStops = (routeId: number) => {
+    return request({ url: `/logistics/batches/routes/${routeId}/stops`, method: 'GET' });
+};

@@ -49,8 +49,9 @@ public class LlmJudgeRouteStrategy implements RouteStrategy {
 
     @Override
     public RouteResultDTO plan(double startLat, double startLon,
-                               double endLat, double endLon) {
-        log.info("[{}] 开始规划: ({},{}) -> ({},{})", strategyName(), startLat, startLon, endLat, endLon);
+                               double endLat, double endLon,
+                               LocalDateTime plannedTime) {
+        log.info("[{}] 开始规划: ({},{}) -> ({},{}), plannedTime={}", strategyName(), startLat, startLon, endLat, endLon, plannedTime);
 
         // ── 第一步：生成多条候选路线 ─────────────────────────────────────
         List<RouteResultDTO> candidates = generateCandidates(startLat, startLon, endLat, endLon);
@@ -66,7 +67,7 @@ public class LlmJudgeRouteStrategy implements RouteStrategy {
         }
 
         // ── 第二步：查询历史数据 ─────────────────────────────────────────
-        HistoryContextDTO history = historyService.buildContext(startLat, startLon, endLat, endLon);
+        HistoryContextDTO history = historyService.buildContext(startLat, startLon, endLat, endLon, plannedTime);
 
         // ── 第三步：调用 LLM 裁判 ────────────────────────────────────────
         try {
@@ -146,14 +147,13 @@ public class LlmJudgeRouteStrategy implements RouteStrategy {
     private String buildUserPrompt(List<RouteResultDTO> candidates, HistoryContextDTO history,
                                     double startLat, double startLon,
                                     double endLat, double endLon) {
-        LocalDateTime now = LocalDateTime.now();
         StringBuilder sb = new StringBuilder();
 
         sb.append("## 本次规划任务\n");
         sb.append("起点坐标：(").append(startLat).append(", ").append(startLon).append(")\n");
         sb.append("终点坐标：(").append(endLat).append(", ").append(endLon).append(")\n");
-        sb.append("当前时间：").append(history.getDayOfWeek())
-          .append(" ").append(String.format("%02d:%02d", now.getHour(), now.getMinute()))
+        sb.append("计划出发时间：").append(history.getDayOfWeek())
+          .append(" ").append(String.format("%02d:00", history.getCurrentHour()))
           .append(" [").append(history.getTimePeriod()).append("]\n\n");
 
         sb.append("## 候选路线（A*算法规划，坐标已确定，不可修改）\n");

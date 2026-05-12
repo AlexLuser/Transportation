@@ -49,7 +49,10 @@ public class Warehouse {
 
     /** 经度（用于物流路线规划，可选） */
     private Double longitude;
-    
+
+    /** 归属全国城市级配送中心ID（关联 national_hub.id） */
+    private Long affiliatedHubId;
+
     /** 创建时间 */
     private Date createTime;
     

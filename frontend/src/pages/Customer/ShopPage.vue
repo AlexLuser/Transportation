@@ -224,7 +224,7 @@
 
     const goToOrder = (product: any) => {
         dialogVisible.value = false;
-        router.push({ path: '/customer/home/shop-order', query: { productId: product.id } });
+        router.push({ path: '/sender/home/shipment', query: { productId: product.id } });
     };
 
     onMounted(() => {

@@ -24,7 +24,7 @@
             <el-table :data="products" stripe>
                 <el-table-column label="商品名称" prop="productName" min-width="160" show-overflow-tooltip />
                 <el-table-column label="商品编码" prop="productCode" width="130" show-overflow-tooltip />
-                <el-table-column label="商户ID" prop="shopId" width="90" align="center" />
+                <el-table-column label="所属商户" prop="shopId" width="90" align="center" />
                 <el-table-column label="售价" width="100">
                     <template #default="{ row }"><span class="price-text">¥{{ row.price }}</span></template>
                 </el-table-column>
@@ -87,9 +87,9 @@
                         </span>
                     </div>
                     <el-descriptions :column="2" border size="small">
-                        <el-descriptions-item label="商户ID">{{ detailProduct.shopId }}</el-descriptions-item>
+                        <el-descriptions-item label="所属商户">{{ detailProduct.shopId }}</el-descriptions-item>
                         <el-descriptions-item label="商品编码">{{ detailProduct.productCode ?? '-' }}</el-descriptions-item>
-                        <el-descriptions-item label="分类ID">{{ detailProduct.categoryId ?? '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="商品分类">{{ detailProduct.categoryId ?? '-' }}</el-descriptions-item>
                         <el-descriptions-item label="单位">{{ detailProduct.unit ?? '-' }}</el-descriptions-item>
                         <el-descriptions-item label="重量">{{ detailProduct.weight ? detailProduct.weight + ' kg' : '-' }}</el-descriptions-item>
                         <el-descriptions-item label="销量">{{ detailProduct.salesCount ?? 0 }} 件</el-descriptions-item>
@@ -172,7 +172,7 @@
             detailVisible.value = false;
             fetchProducts();
         } catch {
-            ElMessage.error('审核失败，请确认后端已授予管理员商品修改权限');
+            ElMessage.error('审核操作失败，请稍后重试或联系系统管理员');
         } finally {
             approving.value = false;
         }

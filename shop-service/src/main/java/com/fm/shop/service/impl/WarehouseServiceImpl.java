@@ -9,6 +9,9 @@ import com.fm.shop.entity.Warehouse;
 import com.fm.shop.mapper.WarehouseMapper;
 import com.fm.shop.service.WarehouseService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -27,16 +30,22 @@ public class WarehouseServiceImpl extends ServiceImpl<WarehouseMapper, Warehouse
     private AmapGeocodingService amapGeocodingService;
 
     @Override
+    @Cacheable(value = "warehouseAll", key = "'all'")
     public List<Warehouse> getAllWarehouses() {
         return warehouseMapper.selectList(null);
     }
 
     @Override
+    @Cacheable(value = "warehouseById", key = "#warehouseId", unless = "#result == null")
     public Warehouse getWarehouseById(Long warehouseId) {
         return warehouseMapper.selectById(warehouseId);
     }
 
     @Override
+    @Caching(evict = {
+        @CacheEvict(value = "warehouseById", key = "#warehouse.id", condition = "#warehouse.id != null"),
+        @CacheEvict(value = "warehouseAll",  key = "'all'")
+    })
     public Warehouse saveOrUpdateWarehouse(Warehouse warehouse) {
         Warehouse existing = warehouse.getId() != null ? getWarehouseById(warehouse.getId()) : null;
         applyGeocode(warehouse, existing);
@@ -49,6 +58,10 @@ public class WarehouseServiceImpl extends ServiceImpl<WarehouseMapper, Warehouse
     }
 
     @Override
+    @Caching(evict = {
+        @CacheEvict(value = "warehouseById", key = "#warehouseId"),
+        @CacheEvict(value = "warehouseAll",  key = "'all'")
+    })
     public boolean updateWarehouseCapacity(Long warehouseId, Integer capacity) {
         LambdaUpdateWrapper<Warehouse> wrapper = new LambdaUpdateWrapper<>();
         wrapper.eq(Warehouse::getId, warehouseId).set(Warehouse::getCapacity, capacity);
@@ -56,9 +69,11 @@ public class WarehouseServiceImpl extends ServiceImpl<WarehouseMapper, Warehouse
     }
 
     @Override
+    @Caching(evict = {
+        @CacheEvict(value = "warehouseById", key = "#warehouseId"),
+        @CacheEvict(value = "warehouseAll",  key = "'all'")
+    })
     public boolean deleteWarehouse(Long warehouseId) {
-        // 注意：删除仓库前，应该先删除关联的库存信息
-        // 这里只删除仓库信息，库存的级联删除需要在业务层处理
         return warehouseMapper.deleteById(warehouseId) > 0;
     }
 

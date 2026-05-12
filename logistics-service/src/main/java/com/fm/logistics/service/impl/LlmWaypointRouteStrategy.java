@@ -51,11 +51,12 @@ public class LlmWaypointRouteStrategy implements RouteStrategy {
 
     @Override
     public RouteResultDTO plan(double startLat, double startLon,
-                               double endLat, double endLon) {
-        log.info("[{}] 开始规划: ({},{}) -> ({},{})", strategyName(), startLat, startLon, endLat, endLon);
+                               double endLat, double endLon,
+                               LocalDateTime plannedTime) {
+        log.info("[{}] 开始规划: ({},{}) -> ({},{}), plannedTime={}", strategyName(), startLat, startLon, endLat, endLon, plannedTime);
 
         // ── 第一步：查询历史数据 ─────────────────────────────────────────
-        HistoryContextDTO history = historyService.buildContext(startLat, startLon, endLat, endLon);
+        HistoryContextDTO history = historyService.buildContext(startLat, startLon, endLat, endLon, plannedTime);
 
         // ── 第二步：调用 LLM 决策战略路点 ───────────────────────────────
         LlmDecisionResult decision;
@@ -71,7 +72,7 @@ public class LlmWaypointRouteStrategy implements RouteStrategy {
 
         } catch (Exception e) {
             log.warn("[{}] LLM调用失败，降级为直接A*: {}", strategyName(), e.getMessage());
-            return astarStrategy.plan(startLat, startLon, endLat, endLon);
+            return astarStrategy.plan(startLat, startLon, endLat, endLon, plannedTime);
         }
 
         // ── 第三步：构建分段路点列表 ──────────────────────────────────────
@@ -80,7 +81,7 @@ public class LlmWaypointRouteStrategy implements RouteStrategy {
         // LLM 输出空路点时，直接 A* 即可（但保留 LLM 的 decision 信息）
         if (segmentPoints.size() == 2) {
             log.info("[{}] LLM建议直达策略，调用单段A*", strategyName());
-            RouteResultDTO direct = astarStrategy.plan(startLat, startLon, endLat, endLon);
+            RouteResultDTO direct = astarStrategy.plan(startLat, startLon, endLat, endLon, plannedTime);
             if (direct.isSuccess()) {
                 direct.setLlmDecision(decision);
                 direct.setLlmEnhanced(true);
@@ -93,7 +94,7 @@ public class LlmWaypointRouteStrategy implements RouteStrategy {
 
         if (!merged.isSuccess()) {
             log.warn("[{}] 分段规划失败（{}），降级为直接A*", strategyName(), merged.getErrorMsg());
-            return astarStrategy.plan(startLat, startLon, endLat, endLon);
+            return astarStrategy.plan(startLat, startLon, endLat, endLon, plannedTime);
         }
 
         // 若 LLM 提供了预期速度，用它修正总时间
@@ -152,7 +153,7 @@ public class LlmWaypointRouteStrategy implements RouteStrategy {
             double[] from = points.get(i);
             double[] to   = points.get(i + 1);
 
-            RouteResultDTO seg = astarStrategy.plan(from[0], from[1], to[0], to[1]);
+            RouteResultDTO seg = astarStrategy.plan(from[0], from[1], to[0], to[1], null);
             if (!seg.isSuccess()) {
                 return RouteResultDTO.error("第" + (i + 1) + "段规划失败: " + seg.getErrorMsg());
             }

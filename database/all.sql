@@ -1,3 +1,32 @@
+SET NAMES utf8mb4;
+SET CHARACTER SET utf8mb4;
+
+-- 用户表
+-- 用于存储系统用户基本信息
+
+DROP TABLE IF EXISTS `user`;
+
+CREATE TABLE `user` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '用户ID',
+  `username` VARCHAR(100) NOT NULL COMMENT '用户名',
+  `secret` VARCHAR(100) NOT NULL COMMENT '密码哈希值',
+  `permission` INT NOT NULL COMMENT '权限Flag：1=管理员(admin)，2=发件人(sender)，3=货主(merchant)，4=运输员(driver)',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_username` (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+
+-- 插入测试数据
+-- 注意：密码统一为 123456，已使用BCrypt加密
+-- 实际使用时，密码需要通过BCrypt加密后再存储
+
+INSERT INTO `user` (`username`, `secret`, `permission`) VALUES
+('admin',        '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 1),  -- 管理员（密码：123456）
+('sender',       '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- 发件人（密码：123456）
+('merchant',     '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 3),  -- 货主（密码：123456）
+('merchant2',    '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 3),  -- 货主2（密码：123456）
+('merchant_bj',  '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 3),  -- 华北货主（密码：123456，MCMF 京仓发全国测试）
+('driver',       '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4);  -- 运输员（密码：123456）
+
 -- 顾客信息表
 -- 用于存储顾客用户的详细信息
 -- 关联user表，通过user_id关联
@@ -46,10 +75,10 @@ CREATE TABLE `customer_address` (
 
 -- ============================================================
 -- 测试数据
--- user_id=2 对应 user.sql 中的 customer 用户（第2条记录）
+-- user_id=2 对应 user 表中的 sender 用户（第2条记录）
 -- ============================================================
 
--- 顾客信息
+-- 发件人信息
 INSERT INTO `customer_info` (`user_id`, `real_name`, `phone`, `email`, `gender`, `birthday`, `status`) VALUES
 (2, '张三', '13800138000', 'zhangsan@example.com', 1, '1990-05-15', 1);
 
@@ -61,7 +90,7 @@ VALUES
 -- 默认地址：上海浦东（物流测试主用地址，order_id=1 的收货地址，坐标与 logistics.sql 一致）
 (1, '张三', '13800138000', '上海市', '上海市', '浦东新区', '浦东新区陆家嘴环路1000号', '200120', 1, 31.2356, 121.5050),
 -- 备用地址：上海静安
-(1, '张三', '13800138001', '上海市', '上海市', '静安区', '静安区南京西路688号', '200041', 0, 31.2289, 121.4490);
+(1, '张三', '13800138000', '上海市', '上海市', '静安区', '静安区南京西路688号', '200041', 0, 31.2289, 121.4490);
 
 -- 运输员服务数据库表
 -- 包含运输员信息、车辆信息、订单配送等
@@ -122,7 +151,7 @@ CREATE TABLE `vehicle_info` (
 -- ============================================
 CREATE TABLE `order_delivery` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '配送ID',
-  `order_id` BIGINT NOT NULL COMMENT '关联order_info表的id',
+  `order_id` BIGINT DEFAULT NULL COMMENT '关联order_info表的id（干线路线为NULL）',
   `driver_id` BIGINT COMMENT '关联driver_info表的id（接单后才有）',
   `vehicle_id` BIGINT COMMENT '关联vehicle_info表的id（使用的车辆）',
   `delivery_status` TINYINT DEFAULT 0 COMMENT '配送状态：0=待接单，1=已接单，2=运输中，3=已送达，4=已取消',
@@ -135,18 +164,24 @@ CREATE TABLE `order_delivery` (
   `receiver_name` VARCHAR(50) COMMENT '收货人姓名（快照）',
   `receiver_phone` VARCHAR(20) COMMENT '收货人电话（快照）',
   `remark` VARCHAR(500) COMMENT '配送备注',
+  -- Hub-and-Spoke 扩展字段
+  `segment_type` TINYINT NOT NULL DEFAULT 0 COMMENT '配送段类型：0=完整单订单，1=干线（仓库→Hub），2=末端（Hub→客户）',
+  `batch_id`     BIGINT  DEFAULT NULL COMMENT '所属批次ID',
+  `hub_id`       BIGINT  DEFAULT NULL COMMENT '中转站ID（干线司机的目标Hub）',
+  `route_id`     BIGINT  DEFAULT NULL COMMENT '关联物流路线ID（干线路线接单时绑定，末端/普通路线通过orderId查找）',
   `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_order_id` (`order_id`),
+  INDEX `idx_order_id` (`order_id`),
   INDEX `idx_driver_id` (`driver_id`),
   INDEX `idx_delivery_status` (`delivery_status`),
+  INDEX `idx_batch_id` (`batch_id`),
   INDEX `idx_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单配送表';
 
 -- ============================================================
 -- 测试数据
--- user_id=5 → user.sql 中的 driver 用户（第5条记录）
+-- user 表顺序：… shop_bj=id=5，driver=id=6。以下 driver_info.user_id 必须为 6。
 -- ============================================================
 
 -- 运输员信息（driver_id=1，即物流路线中绑定的运输员）
@@ -155,7 +190,7 @@ INSERT INTO `driver_info`
   (`user_id`, `real_name`, `phone`, `email`, `id_card`, `gender`, `birthday`,
    `license_number`, `license_type`, `license_expire_date`, `status`)
 VALUES
-(5, '李四', '13700137000', 'lisi@example.com', '310101199001011234', 1, '1990-01-01',
+(6, '李四', '13700137000', 'lisi@example.com', '310101199001011234', 1, '1990-01-01',
  'SH0001234567890', 'C1', '2030-12-31', 1);
 
 -- 车辆信息（归属于 driver_id=1，驻扎上海，使用沪牌）
@@ -182,324 +217,6 @@ VALUES
   '客户要求放门口'
 );
 
--- ============================================================
--- 物流调度服务数据库表
--- 模块：路径规划
--- 包含：物流路线表、里程碑节点表、实时轨迹表
--- ============================================================
-
--- 按依赖顺序删除旧表
-DROP TABLE IF EXISTS `logistics_node`;
-DROP TABLE IF EXISTS `logistics_track`;
-DROP TABLE IF EXISTS `logistics_route`;
-
-
--- ============================================================
--- 1. 物流路线表
---    一个订单对应一条物流路线，记录从仓库到收货地址的全程信息
---    - 地址和坐标均保存快照（下单时冻结）
---    - planned_route 存储 GeoJSON LineString（GraphHopper 规划结果）
---    - route_status 驱动整个配送状态机
--- ============================================================
-CREATE TABLE `logistics_route` (
-  `id`                    BIGINT       NOT NULL AUTO_INCREMENT COMMENT '路线ID（主键）',
-  `route_no`              VARCHAR(30)  NOT NULL UNIQUE COMMENT '路线编号（LR+yyyyMMddHHmmss+4位随机）',
-  `order_id`              BIGINT       NOT NULL UNIQUE COMMENT '关联订单ID（一个订单只能有一条路线）',
-  `delivery_id`           BIGINT       DEFAULT NULL COMMENT '关联配送记录ID（接单后绑定）',
-  `driver_id`             BIGINT       DEFAULT NULL COMMENT '运输员ID（接单后绑定）',
-  `warehouse_id`          BIGINT       DEFAULT NULL COMMENT '出发仓库ID',
-
-  -- 出发地信息（仓库）
-  `start_address`         VARCHAR(300) NOT NULL COMMENT '出发地址（仓库地址快照）',
-  `start_lat`             DOUBLE       DEFAULT NULL COMMENT '出发地纬度',
-  `start_lng`             DOUBLE       DEFAULT NULL COMMENT '出发地经度',
-
-  -- 目的地信息（收货地址）
-  `end_address`           VARCHAR(300) NOT NULL COMMENT '目的地址（收货地址快照）',
-  `end_lat`               DOUBLE       DEFAULT NULL COMMENT '目的地纬度',
-  `end_lng`               DOUBLE       DEFAULT NULL COMMENT '目的地经度',
-
-  -- 实时位置（运输中持续更新）
-  `current_lat`           DOUBLE       DEFAULT NULL COMMENT '当前位置纬度',
-  `current_lng`           DOUBLE       DEFAULT NULL COMMENT '当前位置经度',
-  `current_address`       VARCHAR(300) DEFAULT NULL COMMENT '当前位置描述（逆地理编码结果）',
-  `last_track_time`       DATETIME     DEFAULT NULL COMMENT '最后一次位置更新时间',
-
-  -- 状态机：0=待出发，1=运输中，2=已送达，3=异常
-  `route_status`          TINYINT      NOT NULL DEFAULT 0 COMMENT '路线状态：0=待出发，1=运输中，2=已送达，3=异常',
-
-  -- 时间预估
-  `estimated_arrival_time` DATETIME   DEFAULT NULL COMMENT '预计到达时间',
-  `actual_arrival_time`   DATETIME    DEFAULT NULL COMMENT '实际到达时间',
-
-  -- 路线数据（GeoJSON）
-  `planned_route`         LONGTEXT     DEFAULT NULL COMMENT '计划路线（GeoJSON LineString，由 GraphHopper 生成）',
-
-  -- 收货人信息快照
-  `receiver_name`         VARCHAR(50)  DEFAULT NULL COMMENT '收货人姓名',
-  `receiver_phone`        VARCHAR(20)  DEFAULT NULL COMMENT '收货人电话',
-  `remark`                VARCHAR(500) DEFAULT NULL COMMENT '备注',
-
-  `create_time`           DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_time`           DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_route_no`   (`route_no`),
-  UNIQUE KEY `uk_order_id`   (`order_id`),
-  INDEX `idx_driver_id`      (`driver_id`),
-  INDEX `idx_warehouse_id`   (`warehouse_id`),
-  INDEX `idx_route_status`   (`route_status`),
-  INDEX `idx_create_time`    (`create_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='物流路线表';
-
-
--- ============================================================
--- 2. 里程碑节点表
---    路线上的关键节点：出发点（type=0）、途经点（type=1）、目的地（type=2）
--- ============================================================
-CREATE TABLE `logistics_node` (
-  `id`                    BIGINT       NOT NULL AUTO_INCREMENT COMMENT '节点ID',
-  `route_id`              BIGINT       NOT NULL COMMENT '所属路线ID',
-  `node_type`             TINYINT      NOT NULL COMMENT '节点类型：0=出发点，1=途经点，2=目的地',
-  `node_name`             VARCHAR(100) NOT NULL COMMENT '节点名称',
-  `node_address`          VARCHAR(300) DEFAULT NULL COMMENT '节点地址',
-  `latitude`              DOUBLE       DEFAULT NULL COMMENT '节点纬度',
-  `longitude`             DOUBLE       DEFAULT NULL COMMENT '节点经度',
-  `sequence_no`           INT          NOT NULL DEFAULT 0 COMMENT '顺序号（0=出发点，99=目的地）',
-  `planned_arrive_time`   DATETIME     DEFAULT NULL COMMENT '计划到达时间',
-  `actual_arrive_time`    DATETIME     DEFAULT NULL COMMENT '实际到达时间',
-  `node_status`           TINYINT      NOT NULL DEFAULT 0 COMMENT '节点状态：0=未到达，1=已到达，2=已跳过',
-  `remark`                VARCHAR(300) DEFAULT NULL COMMENT '节点备注',
-  `create_time`           DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_time`           DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  INDEX `idx_route_id`    (`route_id`),
-  INDEX `idx_node_type`   (`node_type`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='里程碑节点表';
-
-
--- ============================================================
--- 3. 实时轨迹表
---    运输员 App 每15~30秒上报一次GPS，高频写入，ROW_FORMAT=COMPRESSED 压缩存储
--- ============================================================
-CREATE TABLE `logistics_track` (
-  `id`          BIGINT    NOT NULL AUTO_INCREMENT COMMENT '轨迹点ID',
-  `route_id`    BIGINT    NOT NULL COMMENT '所属路线ID',
-  `driver_id`   BIGINT    NOT NULL COMMENT '运输员ID',
-  `latitude`    DOUBLE    NOT NULL COMMENT '纬度',
-  `longitude`   DOUBLE    NOT NULL COMMENT '经度',
-  `altitude`    DOUBLE    DEFAULT NULL COMMENT '海拔（米，可选）',
-  `speed`       DOUBLE    DEFAULT NULL COMMENT '速度（km/h）',
-  `heading`     DOUBLE    DEFAULT NULL COMMENT '方向角（0=正北，顺时针）',
-  `accuracy`    DOUBLE    DEFAULT NULL COMMENT 'GPS精度（米，值越小越精确）',
-  `address`     VARCHAR(300) DEFAULT NULL COMMENT '位置描述（逆地理编码结果，由客户端传入）',
-  `track_time`  DATETIME  NOT NULL COMMENT 'GPS上报时间（客户端本地时间）',
-  `create_time` DATETIME  DEFAULT CURRENT_TIMESTAMP COMMENT '服务端接收时间',
-  PRIMARY KEY (`id`),
-  INDEX `idx_route_id_time` (`route_id`, `track_time`),
-  INDEX `idx_driver_id`     (`driver_id`),
-  INDEX `idx_track_time`    (`track_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='实时轨迹点表'
-  ROW_FORMAT=COMPRESSED;
-
-
--- ============================================================
--- 测试数据说明
--- ----------------------------------------------------------------
--- 完整测试场景：
---   顾客张三（customer_id=1）在优质食品店（shop_id=1）下单
---   订单 ORD20260313000001（order_id=1）已支付并发货
---   从上海华东仓库（warehouse_id=2, 浦东新区物流园区B区2号）发出
---   配送至上海浦东新区陆家嘴环路1000号（address_id=1）
---   运输员李四（driver_id=1）驾驶 沪A12345（vehicle_id=1）正在运输中
---
--- 坐标范围（均在上海浦东区域，与 shanghai-260310.osm.pbf 匹配）：
---   上海华东仓库：         lat=31.1985, lng=121.5889
---   途中-张杨路附近：      lat=31.2100, lng=121.5640
---   途中-世纪大道附近：    lat=31.2256, lng=121.5350（当前位置）
---   目的地-陆家嘴环路：    lat=31.2356, lng=121.5050
---
--- 可用接口测试：
---   GET  /api/logistics/routes/1               查路线详情（routeId=1）
---   GET  /api/logistics/routes/order/1         按订单ID查询（orderId=1）
---   GET  /api/logistics/routes/no/LR202603131200000001  按物流单号查询
---   GET  /api/logistics/track/1/latest         查最新轨迹位置
---   GET  /api/logistics/track/1/history        查完整轨迹历史
---   POST /api/logistics/routes                 用 order_id=2 创建新路线（触发GraphHopper规划）
---   PUT  /api/logistics/routes/1/status        更新路线状态（需 admin/driver 角色）
--- ============================================================
-
--- 物流路线（route_id=1，运输中，与 order_delivery.id=1 对应）
-INSERT INTO `logistics_route`
-  (`route_no`, `order_id`, `delivery_id`, `driver_id`, `warehouse_id`,
-   `start_address`,  `start_lat`, `start_lng`,
-   `end_address`,    `end_lat`,   `end_lng`,
-   `current_lat`,    `current_lng`, `current_address`, `last_track_time`,
-   `route_status`, `estimated_arrival_time`,
-   `receiver_name`, `receiver_phone`, `remark`, `create_time`)
-VALUES
-(
-  'LR202603131200000001',
-  1, 1, 1, 2,
-  -- 出发地：上海华东仓库
-  '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
-  -- 目的地：张三收货地址
-  '上海市浦东新区陆家嘴环路1000号',              31.2356, 121.5050,
-  -- 当前位置：途中世纪大道附近（与最新轨迹点一致）
-  31.2256, 121.5350, '上海市浦东新区世纪大道附近', DATE_SUB(NOW(), INTERVAL 15 MINUTE),
-  -- 状态：运输中；预计45分钟后到达
-  1, DATE_ADD(NOW(), INTERVAL 45 MINUTE),
-  '张三', '13800138000', NULL,
-  DATE_SUB(NOW(), INTERVAL 60 MINUTE)           -- 路线创建时间（1小时前）
-);
-
--- 里程碑节点（route_id=1）
-INSERT INTO `logistics_node`
-  (`route_id`, `node_type`, `node_name`, `node_address`, `latitude`, `longitude`,
-   `sequence_no`, `planned_arrive_time`, `actual_arrive_time`, `node_status`)
-VALUES
--- 出发点：已离开仓库
-(1, 0, '出发仓库',
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
-  0,
-  DATE_SUB(NOW(), INTERVAL 60 MINUTE),   -- 计划1小时前出发
-  DATE_SUB(NOW(), INTERVAL 60 MINUTE),   -- 实际1小时前出发
-  1),                                    -- 已到达（已出发）
--- 目的地：未到达
-(1, 2, '收货地址',
- '上海市浦东新区陆家嘴环路1000号', 31.2356, 121.5050,
-  99,
-  DATE_ADD(NOW(), INTERVAL 45 MINUTE),   -- 预计45分钟后到达
-  NULL,
-  0);                                    -- 未到达
-
--- 实时轨迹（route_id=1，3条，模拟从仓库出发向陆家嘴行进中）
-INSERT INTO `logistics_track`
-  (`route_id`, `driver_id`, `latitude`, `longitude`, `speed`, `heading`, `accuracy`, `address`, `track_time`)
-VALUES
--- 第1点：从仓库出发（speed=0，准备发车）
-(1, 1, 31.1985, 121.5889,  0.0, 340.0, 5.0,
- '上海市浦东新区物流园区B区2号',
- DATE_SUB(NOW(), INTERVAL 60 MINUTE)),
--- 第2点：途经张杨路
-(1, 1, 31.2100, 121.5640, 38.5, 332.0, 4.5,
- '上海市浦东新区张杨路附近',
- DATE_SUB(NOW(), INTERVAL 30 MINUTE)),
--- 第3点：途经世纪大道（当前最新位置，与 logistics_route.current_lat/lng 一致）
-(1, 1, 31.2256, 121.5350, 42.0, 320.0, 4.0,
- '上海市浦东新区世纪大道附近',
- DATE_SUB(NOW(), INTERVAL 15 MINUTE));
-
--- 订单服务数据库表
--- 包含订单信息、订单项等
-
--- 删除表（按依赖顺序）
-DROP TABLE IF EXISTS `order_item`;
-DROP TABLE IF EXISTS `order_info`;
-
--- ============================================
--- 1. 订单信息表
--- ============================================
-CREATE TABLE `order_info` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '订单ID',
-  `order_no` VARCHAR(50) NOT NULL COMMENT '订单号（唯一）',
-  `customer_id` BIGINT NOT NULL COMMENT '关联customer_info表的id（顾客）',
-  `shop_id` BIGINT NOT NULL COMMENT '关联shop_info表的id（商户）',
-  `address_id` BIGINT NOT NULL COMMENT '关联customer_address表的id（收货地址）',
-  `total_amount` DECIMAL(10, 2) NOT NULL COMMENT '订单总金额（商品金额+运费）',
-  `product_amount` DECIMAL(10, 2) NOT NULL COMMENT '商品总金额',
-  `shipping_fee` DECIMAL(10, 2) DEFAULT 0.00 COMMENT '运费',
-  `warehouse_id` BIGINT DEFAULT NULL COMMENT '发货仓库ID（下单时扣减库存的仓库，用于物流路线起点）',
-  `order_status` TINYINT DEFAULT 0 COMMENT '订单状态：0=待支付，1=待发货，2=待揽件，3=派送中，4=已完成，5=已取消',
-  `payment_status` TINYINT DEFAULT 0 COMMENT '支付状态：0=未支付，1=已支付',
-  `payment_time` DATETIME COMMENT '支付时间',
-  `shipping_time` DATETIME COMMENT '发货时间',
-  `complete_time` DATETIME COMMENT '完成时间',
-  `cancel_time` DATETIME COMMENT '取消时间',
-  `cancel_reason` VARCHAR(255) COMMENT '取消原因',
-  `remark` VARCHAR(500) COMMENT '订单备注',
-  `customer_deleted` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '顾客软删除：0=正常，1=已隐藏（对顾客不可见，商户/管理员仍可见）',
-  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_order_no` (`order_no`),
-  INDEX `idx_customer_id` (`customer_id`),
-  INDEX `idx_shop_id` (`shop_id`),
-  INDEX `idx_warehouse_id` (`warehouse_id`),
-  INDEX `idx_order_status` (`order_status`),
-  INDEX `idx_create_time` (`create_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单信息表';
-
--- ============================================
--- 2. 订单项表（订单商品明细）
--- ============================================
-CREATE TABLE `order_item` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '订单项ID',
-  `order_id` BIGINT NOT NULL COMMENT '关联order_info表的id',
-  `product_id` BIGINT NOT NULL COMMENT '关联product_info表的id',
-  `product_name` VARCHAR(200) NOT NULL COMMENT '商品名称（下单时的快照）',
-  `product_image` VARCHAR(255) COMMENT '商品图片（下单时的快照）',
-  `product_price` DECIMAL(10, 2) NOT NULL COMMENT '商品单价（下单时的价格）',
-  `quantity` INT NOT NULL COMMENT '购买数量',
-  `subtotal` DECIMAL(10, 2) NOT NULL COMMENT '小计金额（单价*数量）',
-  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  INDEX `idx_order_id` (`order_id`),
-  INDEX `idx_product_id` (`product_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单项表';
-
--- ============================================================
--- 测试数据
--- customer_id=1  → customer.sql 中的张三
--- shop_id=1      → shop.sql 中的优质食品店
--- address_id=1   → customer.sql 中的上海浦东默认地址
--- ============================================================
-
--- 订单信息测试数据
--- ★ order_id=1：派送中（driver.sql delivery_status=2 运输中，logistics.sql route_status=1 运输中，三表保持一致）
--- ★ order_id=2：已支付待发货（可用于测试"创建路线" POST 接口）
-INSERT INTO `order_info`
-  (`order_no`, `customer_id`, `shop_id`, `address_id`, `warehouse_id`,
-   `total_amount`, `product_amount`, `shipping_fee`,
-   `order_status`, `payment_status`, `payment_time`, `shipping_time`, `remark`,
-   `customer_deleted`)
-VALUES
-(
-  'ORD20260313000001', 1, 1, 1, 2,
-  163.00, 163.00, 0.00,
-  3, 1,                                              -- 派送中（order_status=3），已支付
-  DATE_SUB(NOW(), INTERVAL 3 HOUR),                  -- 3小时前付款
-  DATE_SUB(NOW(), INTERVAL 1 HOUR),                  -- 1小时前发货
-  '请尽快配送',
-  0                                                  -- 顾客未删除
-),
-(
-  'ORD20260313000002', 1, 1, 1, 2,
-  35.00, 35.00, 0.00,
-  1, 1,                                              -- 待发货（order_status=1），已支付
-  DATE_SUB(NOW(), INTERVAL 30 MINUTE),               -- 30分钟前付款
-  NULL,
-  NULL,
-  0                                                  -- 顾客未删除
-);
-
--- 订单项测试数据
--- order_id=1：坚果礼盒 + 有机果汁（均在上海华东仓库 warehouse_id=2 有库存）
-INSERT INTO `order_item`
-  (`order_id`, `product_id`, `product_name`, `product_image`, `product_price`, `quantity`, `subtotal`)
-VALUES
-(1, 1, '优质坚果礼盒', 'https://example.com/images/nut1.jpg',   128.00, 1, 128.00),
-(1, 2, '有机果汁',     'https://example.com/images/juice1.jpg',  35.00, 1,  35.00);
-
--- order_id=2：有机果汁（待发货，可通过 POST /api/logistics/routes 创建路线）
-INSERT INTO `order_item`
-  (`order_id`, `product_id`, `product_name`, `product_image`, `product_price`, `quantity`, `subtotal`)
-VALUES
-(2, 2, '有机果汁', 'https://example.com/images/juice1.jpg', 35.00, 1, 35.00);
-
--- 若现有库仍为旧枚举（3=已完成、4=已取消），可执行下面一条迁移后再启动新代码：
--- UPDATE `order_info` SET `order_status` = `order_status` + 1 WHERE `order_status` >= 3;
 -- 商户服务数据库表
 -- 包含商户信息、商品信息、商品分类、仓库、库存等
 
@@ -591,12 +308,14 @@ CREATE TABLE `warehouse` (
   `capacity` INT DEFAULT 0 COMMENT '仓库容量（单位：件，0表示无限制）',
   `latitude` DOUBLE DEFAULT NULL COMMENT '仓库纬度（用于物流路线规划）',
   `longitude` DOUBLE DEFAULT NULL COMMENT '仓库经度（用于物流路线规划）',
+  `affiliated_hub_id` BIGINT DEFAULT NULL COMMENT '归属全国城市级配送中心ID（关联 national_hub.id）',
   `status` TINYINT DEFAULT 1 COMMENT '状态：0=禁用，1=启用',
   `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   INDEX `idx_warehouse_name` (`warehouse_name`),
-  INDEX `idx_status` (`status`)
+  INDEX `idx_status` (`status`),
+  INDEX `idx_affiliated_hub_id` (`affiliated_hub_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='仓库信息表';
 
 -- ============================================
@@ -618,13 +337,14 @@ CREATE TABLE `warehouse_product` (
 
 -- ============================================================
 -- 测试数据
--- user_id=3 → shop（优质食品店），user_id=4 → shop2（时尚服装店）
+-- user_id=3 → shop（优质食品店），user_id=4 → shop2（时尚服装店），user_id=5 → shop_bj（京北优品铺）
 -- ============================================================
 
--- 商户信息（shop_id=1 为物流测试所用商户）
+-- 商户信息（shop_id=1 为物流测试所用商户；shop_id=3 为华北仓配商户，须绑定 user.id=5 即 shop_bj）
 INSERT INTO `shop_info` (`user_id`, `shop_name`, `shop_phone`, `shop_email`, `description`, `business_license`, `status`) VALUES
 (3, '优质食品店', '021-55001234', 'shop1@example.com', '专业销售优质食品，品质保证', '91310000123456789X', 1),
-(4, '时尚服装店', '021-55005678', 'shop2@example.com', '时尚潮流服装，款式新颖',     '91310000123456789Y', 1);
+(4, '时尚服装店', '021-55005678', 'shop2@example.com', '时尚潮流服装，款式新颖',     '91310000123456789Y', 1),
+(5, '京北优品铺', '010-62001200', 'shopbj@example.com', '华北食品饮料仓配一体，北京仓发货、支持全国配送', '91110100MA00000123', 1);
 
 -- 商品分类
 INSERT INTO `product_category` (`category_name`, `parent_id`, `sort_order`, `description`, `status`) VALUES
@@ -646,16 +366,22 @@ VALUES
 (2, 5, '商务休闲衬衫',   'SP003', '高品质商务休闲衬衫，多色可选',         299.00, 399.00, '件', 0.3,
  '["https://example.com/images/shirt1.jpg","https://example.com/images/shirt2.jpg"]', 1, 15),
 (2, 6, '时尚连衣裙',     'SP004', '春季新款时尚连衣裙，优雅大方',         399.00, 499.00, '件', 0.4,
- '["https://example.com/images/dress1.jpg"]',                                     1, 8);
+ '["https://example.com/images/dress1.jpg"]',                                     1, 8),
+(3, 3, '进京坚果礼盒',   'SP101', '京仓发货坚果礼盒，与上海仓商品独立库存', 128.00, 158.00, '盒', 1.5,
+ '["https://example.com/images/nut1.jpg"]',                                       1, 0),
+(3, 4, '进京有机果汁',   'SP102', '京仓发货有机果汁，便于沪京双向物流演示', 35.00,  45.00,  '瓶', 0.5,
+ '["https://example.com/images/juice1.jpg"]',                                     1, 0);
 
--- 仓库信息（全部位于上海市，与本地 OSM/地图范围一致，避免外地坐标导致路径规划失败）
+-- 仓库信息（上海三仓与本地 OSM 一致；北京仓为真实种子数据，归属 national_hub 北京配送中心 id=4，用于全国/MCMF 演示）
 -- ★ warehouse_id=2（上海华东仓库）为物流测试主用仓库，lat=31.1985, longitude=121.5889
+-- ★ warehouse_id=4（北京大兴履约中心）归属京北优品铺（shop_id=3），affiliated_hub_id=4
 INSERT INTO `warehouse`
-  (`warehouse_name`, `warehouse_phone`, `province`, `city`, `district`, `detail_address`, `postal_code`, `capacity`, `latitude`, `longitude`, `status`)
+  (`warehouse_name`, `warehouse_phone`, `province`, `city`, `district`, `detail_address`, `postal_code`, `capacity`, `latitude`, `longitude`, `affiliated_hub_id`, `status`)
 VALUES
-('上海闵行分拨仓', '021-51001001', '上海市', '上海市', '闵行区',   '闵行区元江路426号物流园1号库', '201111', 10000, 31.0928, 121.4536, 1),
-('上海华东仓库',   '021-87654321', '上海市', '上海市', '浦东新区', '浦东新区物流园区B区2号',     '200135',  8000, 31.1985, 121.5889, 1),  -- ★ 物流测试使用
-('上海宝山分拨仓', '021-51001003', '上海市', '上海市', '宝山区',   '宝山区富锦路1500号物流园C库', '200444',  6000, 31.3988, 121.4312, 1);
+('上海闵行分拨仓', '021-51001001', '上海市', '上海市', '闵行区',   '闵行区元江路426号物流园1号库', '201111', 10000, 31.0928, 121.4536, NULL, 1),
+('上海华东仓库',   '021-87654321', '上海市', '上海市', '浦东新区', '浦东新区物流园区B区2号',     '200135',  8000, 31.1985, 121.5889, NULL, 1),  -- ★ 物流测试使用（Hub 由下方 UPDATE 写入）
+('上海宝山分拨仓', '021-51001003', '上海市', '上海市', '宝山区',   '宝山区富锦路1500号物流园C库', '200444',  6000, 31.3988, 121.4312, NULL, 1),
+('北京大兴履约中心', '010-62001201', '北京市', '北京市', '大兴区', '大兴区京南物流园8号库（京北优品铺）', '102600', 8000, 39.6522, 116.3414, 4, 1);
 
 -- 仓库商品关联（含库存）
 -- 说明：product_id=1（坚果礼盒）和 product_id=2（有机果汁）均存入上海华东仓库（id=2）
@@ -671,910 +397,1075 @@ INSERT INTO `warehouse_product` (`warehouse_id`, `product_id`, `stock`) VALUES
 (2, 4, 20),   -- 时尚连衣裙，库存20
 -- 仓库3（上海宝山分拨仓）
 (3, 2, 100),  -- 有机果汁，库存100
-(3, 4, 10);   -- 时尚连衣裙，库存10
+(3, 4, 10),   -- 时尚连衣裙，库存10
+-- 仓库4（北京大兴履约中心，京北优品铺 shop_id=3 商品）
+(4, 5, 800),  -- 进京坚果礼盒
+(4, 6, 1200); -- 进京有机果汁（京→沪/MCMF 测试主用）
 
--- 用户表
--- 用于存储系统用户基本信息
+-- 订单服务数据库表
+-- 包含订单信息、订单项等
 
-DROP TABLE IF EXISTS `user`;
+-- 删除表（按依赖顺序）
+DROP TABLE IF EXISTS `order_item`;
+DROP TABLE IF EXISTS `order_info`;
 
-CREATE TABLE `user` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '用户ID',
-  `username` VARCHAR(100) NOT NULL COMMENT '用户名',
-  `secret` VARCHAR(100) NOT NULL COMMENT '密码哈希值',
-  `permission` INT NOT NULL COMMENT '权限Flag：1=管理员(admin)，2=顾客用户(customer)，3=商户用户(Shop)，4=运输员(Driver)',
+-- ============================================
+-- 1. 订单信息表
+-- ============================================
+CREATE TABLE `order_info` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '订单ID',
+  `order_no` VARCHAR(50) NOT NULL COMMENT '订单号（唯一）',
+  `customer_id` BIGINT NOT NULL COMMENT '关联customer_info表的id（顾客）',
+  `shop_id` BIGINT DEFAULT NULL COMMENT '关联shop_info表的id（商户），个人寄件为 NULL',
+  `address_id` BIGINT NOT NULL COMMENT '关联customer_address表的id（收货地址）',
+  `total_amount` DECIMAL(10, 2) NOT NULL COMMENT '订单总金额（商品金额+运费）',
+  `product_amount` DECIMAL(10, 2) NOT NULL COMMENT '商品总金额',
+  `shipping_fee` DECIMAL(10, 2) DEFAULT 0.00 COMMENT '运费',
+  `warehouse_id` BIGINT DEFAULT NULL COMMENT '发货仓库ID（商户选择的发货仓库，物流路线起点）',
+  `origin_hub_id` BIGINT DEFAULT NULL COMMENT '发货城市Hub ID（发货时由 ShipmentRoutingService 分配）',
+  `dest_hub_id` BIGINT DEFAULT NULL COMMENT '收货城市Hub ID（发货时由 ShipmentRoutingService 分配）',
+  `flow_plan_id` BIGINT DEFAULT NULL COMMENT 'MCMF流量规划单ID（跨城订单分配到干线批次时写入）',
+  `inter_city_batch_id` BIGINT DEFAULT NULL COMMENT '跨城干线批次ID（分配到干线批次时写入）',
+  `planned_path` VARCHAR(500) DEFAULT NULL COMMENT '规划的完整Hub路径（JSON数组：[hubId1,hubId2,...]，用于多跳干线自动衔接）',
+  `order_status` TINYINT DEFAULT 0 COMMENT '订单状态：0=待支付，1=待发货，2=待揽件，3=派送中，4=已完成，5=已取消',
+  `payment_status` TINYINT DEFAULT 0 COMMENT '支付状态：0=未支付，1=已支付',
+  `payment_time` DATETIME COMMENT '支付时间',
+  `shipping_time` DATETIME COMMENT '发货时间',
+  `complete_time` DATETIME COMMENT '完成时间',
+  `cancel_time` DATETIME COMMENT '取消时间',
+  `cancel_reason` VARCHAR(255) COMMENT '取消原因',
+  `remark` VARCHAR(500) COMMENT '订单备注',
+  `customer_deleted` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '顾客软删除：0=正常，1=已隐藏（对顾客不可见，商户/管理员仍可见）',
+  `order_type`       TINYINT NOT NULL DEFAULT 0 COMMENT '订单类型：0=商户发货订单，1=个人寄件',
+  `sender_address`   VARCHAR(500) DEFAULT NULL COMMENT '取件地址文本快照（个人寄件用）',
+  `sender_latitude`  DOUBLE DEFAULT NULL COMMENT '取件地址纬度（个人寄件用）',
+  `sender_longitude` DOUBLE DEFAULT NULL COMMENT '取件地址经度（个人寄件用）',
+  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_username` (`username`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+  UNIQUE KEY `uk_order_no` (`order_no`),
+  INDEX `idx_customer_id` (`customer_id`),
+  INDEX `idx_shop_id` (`shop_id`),
+  INDEX `idx_warehouse_id` (`warehouse_id`),
+  INDEX `idx_order_status` (`order_status`),
+  INDEX `idx_origin_hub_id` (`origin_hub_id`),
+  INDEX `idx_dest_hub_id` (`dest_hub_id`),
+  INDEX `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单信息表';
 
--- 插入测试数据
--- 注意：密码统一为 123456，已使用BCrypt加密
--- 实际使用时，密码需要通过BCrypt加密后再存储
-
-INSERT INTO `user` (`username`, `secret`, `permission`) VALUES
-('admin', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 1),      -- 管理员（密码：123456）
-('customer', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- 顾客用户（密码：123456）
-('shop', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 3),      -- 商户用户（密码：123456）
-('shop2', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 3),     -- 商户用户2（密码：123456）
-('driver', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4);     -- 运输员（密码：123456）
+-- ============================================
+-- 2. 订单项表（订单商品明细）
+-- ============================================
+CREATE TABLE `order_item` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '订单项ID',
+  `order_id` BIGINT NOT NULL COMMENT '关联order_info表的id',
+  `product_id` BIGINT DEFAULT NULL COMMENT '关联product_info表的id（个人寄件时为 NULL）',
+  `product_name` VARCHAR(200) NOT NULL COMMENT '商品名称（下单时的快照）',
+  `product_image` VARCHAR(255) COMMENT '商品图片（下单时的快照）',
+  `product_price` DECIMAL(10, 2) NOT NULL COMMENT '商品单价（下单时的价格）',
+  `quantity` INT NOT NULL COMMENT '购买数量',
+  `subtotal` DECIMAL(10, 2) NOT NULL COMMENT '小计金额（单价*数量）',
+  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_order_id` (`order_id`),
+  INDEX `idx_product_id` (`product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单项表';
 
 -- ============================================================
--- 物流历史完整测试数据（generate_history_data.py 生成）
--- 包含：30条历史路线 + 3名新用户 + 完整关联表数据
--- 执行前提：logistics.sql / customer.sql / driver.sql /
---           order.sql / shop.sql / user.sql 均已执行完毕
+-- 测试数据
+-- customer_id=1  → customer.sql 中的张三
+-- shop_id=1      → shop.sql 中的优质食品店
+-- address_id=1   → customer.sql 中的上海浦东默认地址
 -- ============================================================
 
-SET NAMES utf8mb4;
-
--- ──────────────────────────────────────────
--- 新用户（user_id 6-9，追加到已有 1-5 之后）
--- ──────────────────────────────────────────
-INSERT INTO `user` (`id`, `username`, `secret`, `permission`) VALUES
-(6, 'customer2', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- 李明
-(7, 'customer3', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- 王芳
-(8, 'driver2',   '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4),  -- 陈刚
-(9, 'driver3',   '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4);  -- 赵磊
-
--- 顾客信息
-INSERT INTO `customer_info`
-  (`id`, `user_id`, `real_name`, `phone`, `email`, `gender`, `birthday`, `status`)
-VALUES
-(2, 6, '李明', '13900139001', 'liming@example.com',   1, '1988-08-20', 1),
-(3, 7, '王芳', '13600136002', 'wangfang@example.com', 2, '1992-03-12', 1);
-
--- 收货地址（addr_id 3-12，追加到已有 1-2 之后）
-INSERT INTO `customer_address`
-  (`id`, `customer_id`, `receiver_name`, `receiver_phone`,
-   `province`, `city`, `district`, `detail_address`, `postal_code`,
-   `is_default`, `latitude`, `longitude`)
-VALUES
-(3, 1, '张三', '13800138000', '上海市', '上海市', '徐汇区', '上海市徐汇区龙华路668号', '200030', 0, 31.182, 121.438),
-(4, 1, '张三', '13800138000', '上海市', '上海市', '杨浦区', '上海市杨浦区中山北二路800号', '200092', 0, 31.255, 121.505),
-(5, 2, '李明', '13900139001', '上海市', '上海市', '普陀区', '上海市普陀区武威路200号', '200062', 0, 31.242, 121.405),
-(6, 2, '李明', '13900139001', '上海市', '上海市', '黄浦区', '上海市黄浦区南京东路668号', '200001', 0, 31.2321, 121.48),
-(7, 2, '李明', '13900139001', '上海市', '上海市', '长宁区', '上海市长宁区虹桥路1号', '200050', 0, 31.196, 121.346),
-(8, 3, '王芳', '13600136002', '上海市', '上海市', '浦东新区', '上海市浦东新区张江高科技园区', '200120', 0, 31.2021, 121.6087),
-(9, 3, '王芳', '13600136002', '上海市', '上海市', '浦东新区', '上海市浦东新区金桥出口加工区', '200120', 0, 31.206, 121.64),
-(10, 3, '王芳', '13600136002', '上海市', '上海市', '静安区', '上海市静安区大宁路288号', '200040', 0, 31.228, 121.456),
-(11, 2, '李明', '13900139001', '上海市', '上海市', '徐汇区', '上海市徐汇区龙华路668号', '200030', 0, 31.182, 121.438),
-(12, 3, '王芳', '13600136002', '上海市', '上海市', '杨浦区', '上海市杨浦区中山北二路800号', '200092', 0, 31.255, 121.505);
-
--- 运输员信息（driver_id 2-3）
-INSERT INTO `driver_info`
-  (`id`, `user_id`, `real_name`, `phone`, `email`, `id_card`, `gender`, `birthday`,
-   `license_number`, `license_type`, `license_expire_date`, `status`)
-VALUES
-(2, 8, '陈刚', '13900139008', 'chengang@example.com',  '310104198805051234', 1, '1988-05-05',
- 'SH0002345678901', 'C1', '2031-06-30', 1),
-(3, 9, '赵磊', '13600136009', 'zhaolei@example.com',   '310106199209091234', 1, '1992-09-09',
- 'SH0003456789012', 'B2', '2029-12-31', 1);
-
--- 车辆信息（vehicle_id 3-4）
-INSERT INTO `vehicle_info`
-  (`id`, `driver_id`, `vehicle_type`, `vehicle_brand`, `vehicle_model`,
-   `license_plate`, `load_capacity`, `volume_capacity`, `vehicle_status`)
-VALUES
-(3, 2, '小型货车', '福田', 'FT-150', '沪C11223', 2.0, 8.0,  1),
-(4, 3, '中型货车', '庆铃', 'QL-300', '沪D44556', 4.0, 15.0, 1);
-
--- ──────────────────────────────────────────
--- 历史订单（order_id 3-32，全部已完成 status=4）
--- ──────────────────────────────────────────
+-- 订单信息测试数据
+-- ★ order_id=1：派送中（driver.sql delivery_status=2 运输中，logistics.sql route_status=1 运输中，三表保持一致）
+-- ★ order_id=2：已支付待发货（可用于测试"创建路线" POST 接口）
 INSERT INTO `order_info`
-  (`id`, `order_no`, `customer_id`, `shop_id`, `address_id`, `warehouse_id`,
+  (`order_no`, `customer_id`, `shop_id`, `address_id`, `warehouse_id`,
    `total_amount`, `product_amount`, `shipping_fee`,
-   `order_status`, `payment_status`, `payment_time`, `shipping_time`, `complete_time`,
-   `remark`, `customer_deleted`)
+   `order_status`, `payment_status`, `payment_time`, `shipping_time`, `remark`,
+   `customer_deleted`)
 VALUES
-(3, 'ORD_HIST_00000003', 1, 1, 3, 2, 138.00, 128.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '05:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '07:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:28:00'), NULL, 0),
-(4, 'ORD_HIST_00000004', 1, 1, 4, 2, 45.00, 35.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '12:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:32:00'), NULL, 0),
-(5, 'ORD_HIST_00000005', 2, 1, 7, 2, 45.00, 35.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '15:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '17:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:52:00'), NULL, 0),
-(6, 'ORD_HIST_00000006', 2, 2, 5, 2, 309.00, 299.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '08:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:52:00'), NULL, 0),
-(7, 'ORD_HIST_00000007', 3, 1, 8, 2, 138.00, 128.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '10:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:22:00'), NULL, 0),
-(8, 'ORD_HIST_00000008', 1, 2, 4, 2, 409.00, 399.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '13:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:32:00'), NULL, 0),
-(9, 'ORD_HIST_00000009', 2, 1, 6, 2, 45.00, 35.00, 10.00, 5, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 8 DAY), '14:00:00'), NULL, NULL, NULL, 0),
-(10, 'ORD_HIST_00000010', 3, 1, 9, 2, 138.00, 128.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '07:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '09:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '10:00:00'), NULL, 0),
-(11, 'ORD_HIST_00000011', 3, 2, 10, 2, 309.00, 299.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '15:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '18:13:00'), NULL, 0),
-(12, 'ORD_HIST_00000012', 2, 1, 6, 2, 45.00, 35.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '11:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:38:00'), NULL, 0),
-(13, 'ORD_HIST_00000013', 1, 2, 3, 2, 409.00, 399.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '07:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:43:00'), NULL, 0),
-(14, 'ORD_HIST_00000014', 3, 1, 10, 2, 138.00, 128.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '06:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:57:00'), NULL, 0),
-(15, 'ORD_HIST_00000015', 2, 2, 7, 2, 309.00, 299.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '16:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '19:18:00'), NULL, 0),
-(16, 'ORD_HIST_00000016', 1, 1, 4, 2, 45.00, 35.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '13:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '16:05:00'), NULL, 0),
-(17, 'ORD_HIST_00000017', 3, 2, 8, 2, 409.00, 399.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '06:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:52:00'), NULL, 0),
-(18, 'ORD_HIST_00000018', 2, 1, 11, 2, 138.00, 128.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '07:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:43:00'), NULL, 0),
-(19, 'ORD_HIST_00000019', 1, 1, 2, 2, 45.00, 35.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '10:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '12:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '13:22:00'), NULL, 0),
-(20, 'ORD_HIST_00000020', 2, 2, 6, 2, 309.00, 299.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '05:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:50:00'), NULL, 0),
-(21, 'ORD_HIST_00000021', 3, 1, 12, 2, 45.00, 35.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:32:00'), NULL, 0),
-(22, 'ORD_HIST_00000022', 3, 2, 8, 2, 409.00, 399.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '11:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:53:00'), NULL, 0),
-(23, 'ORD_HIST_00000023', 3, 1, 9, 2, 138.00, 128.00, 10.00, 5, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 22 DAY), '15:30:00'), NULL, NULL, NULL, 0),
-(24, 'ORD_HIST_00000024', 3, 2, 10, 2, 309.00, 299.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '07:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:43:00'), NULL, 0),
-(25, 'ORD_HIST_00000025', 2, 1, 5, 2, 45.00, 35.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '14:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:53:00'), NULL, 0),
-(26, 'ORD_HIST_00000026', 1, 1, 1, 1, 138.00, 128.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '07:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '10:00:00'), NULL, 0),
-(27, 'ORD_HIST_00000027', 1, 1, 3, 1, 138.00, 128.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '12:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '14:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '15:18:00'), NULL, 0),
-(28, 'ORD_HIST_00000028', 3, 1, 8, 1, 45.00, 35.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '08:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '10:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '11:35:00'), NULL, 0),
-(29, 'ORD_HIST_00000029', 3, 2, 12, 3, 409.00, 399.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '08:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:55:00'), NULL, 0),
-(30, 'ORD_HIST_00000030', 2, 1, 7, 3, 45.00, 35.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '11:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '14:18:00'), NULL, 0),
-(31, 'ORD_HIST_00000031', 1, 2, 4, 3, 409.00, 399.00, 10.00, 5, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 30 DAY), '15:00:00'), NULL, NULL, NULL, 0),
-(32, 'ORD_HIST_00000032', 2, 1, 11, 3, 45.00, 35.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '07:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '10:40:00'), NULL, 0);
+(
+  'ORD20260313000001', 1, 1, 1, 2,
+  163.00, 163.00, 0.00,
+  3, 1,                                              -- 派送中（order_status=3），已支付
+  DATE_SUB(NOW(), INTERVAL 3 HOUR),                  -- 3小时前付款
+  DATE_SUB(NOW(), INTERVAL 1 HOUR),                  -- 1小时前发货
+  '请尽快配送',
+  0                                                  -- 顾客未删除
+),
+(
+  'ORD20260313000002', 1, 1, 1, 2,
+  35.00, 35.00, 0.00,
+  1, 1,                                              -- 待发货（order_status=1），已支付
+  DATE_SUB(NOW(), INTERVAL 30 MINUTE),               -- 30分钟前付款
+  NULL,
+  NULL,
+  0                                                  -- 顾客未删除
+);
 
--- 订单项（每订单1件商品）
+-- 订单项测试数据
+-- order_id=1：坚果礼盒 + 有机果汁（均在上海华东仓库 warehouse_id=2 有库存）
 INSERT INTO `order_item`
   (`order_id`, `product_id`, `product_name`, `product_image`, `product_price`, `quantity`, `subtotal`)
 VALUES
-(3, 1, '优质坚果礼盒', 'https://example.com/images/prod1.jpg', 128.00, 1, 128.00),
-(4, 2, '有机果汁', 'https://example.com/images/prod2.jpg', 35.00, 1, 35.00),
-(5, 2, '有机果汁', 'https://example.com/images/prod2.jpg', 35.00, 1, 35.00),
-(6, 3, '商务休闲衬衫', 'https://example.com/images/prod3.jpg', 299.00, 1, 299.00),
-(7, 1, '优质坚果礼盒', 'https://example.com/images/prod1.jpg', 128.00, 1, 128.00),
-(8, 4, '时尚连衣裙', 'https://example.com/images/prod4.jpg', 399.00, 1, 399.00),
-(9, 2, '有机果汁', 'https://example.com/images/prod2.jpg', 35.00, 1, 35.00),
-(10, 1, '优质坚果礼盒', 'https://example.com/images/prod1.jpg', 128.00, 1, 128.00),
-(11, 3, '商务休闲衬衫', 'https://example.com/images/prod3.jpg', 299.00, 1, 299.00),
-(12, 2, '有机果汁', 'https://example.com/images/prod2.jpg', 35.00, 1, 35.00),
-(13, 4, '时尚连衣裙', 'https://example.com/images/prod4.jpg', 399.00, 1, 399.00),
-(14, 1, '优质坚果礼盒', 'https://example.com/images/prod1.jpg', 128.00, 1, 128.00),
-(15, 3, '商务休闲衬衫', 'https://example.com/images/prod3.jpg', 299.00, 1, 299.00),
-(16, 2, '有机果汁', 'https://example.com/images/prod2.jpg', 35.00, 1, 35.00),
-(17, 4, '时尚连衣裙', 'https://example.com/images/prod4.jpg', 399.00, 1, 399.00),
-(18, 1, '优质坚果礼盒', 'https://example.com/images/prod1.jpg', 128.00, 1, 128.00),
-(19, 2, '有机果汁', 'https://example.com/images/prod2.jpg', 35.00, 1, 35.00),
-(20, 3, '商务休闲衬衫', 'https://example.com/images/prod3.jpg', 299.00, 1, 299.00),
-(21, 2, '有机果汁', 'https://example.com/images/prod2.jpg', 35.00, 1, 35.00),
-(22, 4, '时尚连衣裙', 'https://example.com/images/prod4.jpg', 399.00, 1, 399.00),
-(23, 1, '优质坚果礼盒', 'https://example.com/images/prod1.jpg', 128.00, 1, 128.00),
-(24, 3, '商务休闲衬衫', 'https://example.com/images/prod3.jpg', 299.00, 1, 299.00),
-(25, 2, '有机果汁', 'https://example.com/images/prod2.jpg', 35.00, 1, 35.00),
-(26, 1, '优质坚果礼盒', 'https://example.com/images/prod1.jpg', 128.00, 1, 128.00),
-(27, 1, '优质坚果礼盒', 'https://example.com/images/prod1.jpg', 128.00, 1, 128.00),
-(28, 2, '有机果汁', 'https://example.com/images/prod2.jpg', 35.00, 1, 35.00),
-(29, 4, '时尚连衣裙', 'https://example.com/images/prod4.jpg', 399.00, 1, 399.00),
-(30, 2, '有机果汁', 'https://example.com/images/prod2.jpg', 35.00, 1, 35.00),
-(31, 4, '时尚连衣裙', 'https://example.com/images/prod4.jpg', 399.00, 1, 399.00),
-(32, 2, '有机果汁', 'https://example.com/images/prod2.jpg', 35.00, 1, 35.00);
+(1, 1, '优质坚果礼盒', 'https://example.com/images/nut1.jpg',   128.00, 1, 128.00),
+(1, 2, '有机果汁',     'https://example.com/images/juice1.jpg',  35.00, 1,  35.00);
 
--- 配送记录（delivery_id 2-31，全部已送达 delivery_status=3）
-INSERT INTO `order_delivery`
-  (`id`, `order_id`, `driver_id`, `vehicle_id`, `delivery_status`,
-   `accept_time`, `pickup_time`, `delivery_time`,
-   `delivery_address`, `receiver_name`, `receiver_phone`, `remark`)
+-- order_id=2：有机果汁（待发货，可通过 POST /api/logistics/routes 创建路线）
+INSERT INTO `order_item`
+  (`order_id`, `product_id`, `product_name`, `product_image`, `product_price`, `quantity`, `subtotal`)
 VALUES
-(2, 3, 1, 1, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '07:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '07:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:28:00'), '上海市徐汇区龙华路668号', '张三', '13800138000', NULL),
-(3, 4, 1, 1, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '13:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:32:00'), '上海市杨浦区中山北二路800号', '张三', '13800138000', NULL),
-(4, 5, 1, 1, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '17:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '17:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:52:00'), '上海市长宁区虹桥路1号', '李明', '13900139001', NULL),
-(5, 6, 2, 3, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '09:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:52:00'), '上海市普陀区武威路200号', '李明', '13900139001', NULL),
-(6, 7, 2, 3, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '11:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:22:00'), '上海市浦东新区张江高科技园区', '王芳', '13600136002', NULL),
-(7, 8, 1, 1, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '14:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:32:00'), '上海市杨浦区中山北二路800号', '张三', '13800138000', NULL),
-(8, 9, 2, 3, 4, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 8 DAY), '15:30:00'), NULL, NULL, '上海市黄浦区南京东路668号', '李明', '13900139001', NULL),
-(9, 10, 3, 4, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '09:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '10:00:00'), '上海市浦东新区金桥出口加工区', '王芳', '13600136002', NULL),
-(10, 11, 3, 4, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '16:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '18:13:00'), '上海市静安区大宁路288号', '王芳', '13600136002', NULL),
-(11, 12, 1, 1, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '12:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:38:00'), '上海市黄浦区南京东路668号', '李明', '13900139001', NULL),
-(12, 13, 2, 3, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '08:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:43:00'), '上海市徐汇区龙华路668号', '张三', '13800138000', NULL),
-(13, 14, 3, 4, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '07:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:57:00'), '上海市静安区大宁路288号', '王芳', '13600136002', NULL),
-(14, 15, 1, 1, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '17:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '19:18:00'), '上海市长宁区虹桥路1号', '李明', '13900139001', NULL),
-(15, 16, 2, 3, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '16:05:00'), '上海市杨浦区中山北二路800号', '张三', '13800138000', NULL),
-(16, 17, 1, 1, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:52:00'), '上海市浦东新区张江高科技园区', '王芳', '13600136002', NULL),
-(17, 18, 3, 4, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '08:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:43:00'), '上海市徐汇区龙华路668号', '李明', '13900139001', NULL),
-(18, 19, 2, 3, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '12:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '12:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '13:22:00'), '上海市静安区南京西路688号', '张三', '13800138000', NULL),
-(19, 20, 1, 1, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '06:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:50:00'), '上海市黄浦区南京东路668号', '李明', '13900139001', NULL),
-(20, 21, 3, 4, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '10:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:32:00'), '上海市杨浦区中山北二路800号', '王芳', '13600136002', NULL),
-(21, 22, 2, 3, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:53:00'), '上海市浦东新区张江高科技园区', '王芳', '13600136002', NULL),
-(22, 23, 1, 1, 4, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 22 DAY), '17:00:00'), NULL, NULL, '上海市浦东新区金桥出口加工区', '王芳', '13600136002', NULL),
-(23, 24, 2, 3, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '08:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:43:00'), '上海市静安区大宁路288号', '王芳', '13600136002', NULL),
-(24, 25, 3, 4, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '15:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:53:00'), '上海市普陀区武威路200号', '李明', '13900139001', NULL),
-(25, 26, 1, 1, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '08:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '10:00:00'), '上海市浦东新区陆家嘴环路1000号', '张三', '13800138000', NULL),
-(26, 27, 2, 3, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '14:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '14:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '15:18:00'), '上海市徐汇区龙华路668号', '张三', '13800138000', NULL),
-(27, 28, 3, 4, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '10:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '10:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '11:35:00'), '上海市浦东新区张江高科技园区', '王芳', '13600136002', NULL),
-(28, 29, 3, 4, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '09:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:55:00'), '上海市杨浦区中山北二路800号', '王芳', '13600136002', NULL),
-(29, 30, 2, 3, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '12:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '14:18:00'), '上海市长宁区虹桥路1号', '李明', '13900139001', NULL),
-(30, 31, 3, 4, 4, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 30 DAY), '16:30:00'), NULL, NULL, '上海市杨浦区中山北二路800号', '张三', '13800138000', NULL),
-(31, 32, 1, 1, 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '10:40:00'), '上海市徐汇区龙华路668号', '李明', '13900139001', NULL);
+(2, 2, '有机果汁', 'https://example.com/images/juice1.jpg', 35.00, 1, 35.00);
 
--- ──────────────────────────────────────────
--- 物流路线（route_id 2-31）
--- ──────────────────────────────────────────
+-- 若现有库仍为旧枚举（3=已完成、4=已取消），可执行下面一条迁移后再启动新代码：
+-- UPDATE `order_info` SET `order_status` = `order_status` + 1 WHERE `order_status` >= 3;
+-- ============================================================
+-- 物流调度服务数据库表
+-- 模块：路径规划
+-- 包含：物流路线表、里程碑节点表、实时轨迹表
+-- ============================================================
+
+-- ============================================================
+-- Hub-and-Spoke 物流扩展表
+-- ============================================================
+
+-- 按依赖顺序删除旧表（含新增表）
+DROP TABLE IF EXISTS `logistics_batch_item`;
+DROP TABLE IF EXISTS `logistics_batch`;
+DROP TABLE IF EXISTS `logistics_hub`;
+DROP TABLE IF EXISTS `logistics_node`;
+DROP TABLE IF EXISTS `logistics_track`;
+DROP TABLE IF EXISTS `logistics_route`;
+
+-- ============================================================
+-- 0-A. 物流中转站表
+-- ============================================================
+CREATE TABLE `logistics_hub` (
+  `id`           BIGINT       NOT NULL AUTO_INCREMENT COMMENT '中转站ID',
+  `name`         VARCHAR(100) NOT NULL COMMENT '中转站名称',
+  `address`      VARCHAR(300) NOT NULL COMMENT '中转站地址',
+  `latitude`     DOUBLE       NOT NULL COMMENT '纬度',
+  `longitude`    DOUBLE       NOT NULL COMMENT '经度',
+  `region`       VARCHAR(50)  DEFAULT NULL COMMENT '所属区域',
+  `max_capacity` INT          DEFAULT 1000 COMMENT '最大日处理量',
+  `current_load` INT          DEFAULT 0    COMMENT '当前待处理包裹数',
+  `status`       TINYINT      NOT NULL DEFAULT 0 COMMENT '状态：0=正常，1=满载，2=关闭',
+  `remark`       VARCHAR(300) DEFAULT NULL COMMENT '备注',
+  `create_time`  DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  `update_time`  DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_status` (`status`),
+  INDEX `idx_region` (`region`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='物流中转站表';
+
+INSERT INTO `logistics_hub` (`name`, `address`, `latitude`, `longitude`, `region`, `max_capacity`, `status`) VALUES
+('上海浦东分拨中心', '上海市浦东新区外环路6888号', 31.2180, 121.6200, '浦东', 2000, 0),
+('上海虹桥分拨中心', '上海市闵行区申长路2600号',   31.1950, 121.3300, '虹桥', 1500, 0),
+('上海松江分拨中心', '上海市松江区九亭镇九莘路',   31.0300, 121.2200, '松江', 1000, 0);
+
+-- ============================================================
+-- 0-B. 配送批次表
+-- ============================================================
+CREATE TABLE `logistics_batch` (
+  `id`              BIGINT      NOT NULL AUTO_INCREMENT COMMENT '批次ID',
+  `batch_no`        VARCHAR(30) NOT NULL UNIQUE COMMENT '批次编号（LB+时间戳+4位随机）',
+  `warehouse_id`    BIGINT      NOT NULL COMMENT '发货仓库ID',
+  `hub_id`          BIGINT      DEFAULT NULL COMMENT '中转站ID',
+  `trunk_route_id`  BIGINT      DEFAULT NULL COMMENT '干线路线ID（segment_type=1）',
+  `batch_status`    TINYINT     NOT NULL DEFAULT 0
+                    COMMENT '批次状态：0=待出发，1=干线运输中，2=已到中转站，3=末端派送中，4=全部完成',
+  `total_orders`    INT         NOT NULL DEFAULT 0 COMMENT '订单总数',
+  `use_hub`         TINYINT     NOT NULL DEFAULT 1 COMMENT '是否经Hub中转：0=否，1=是',
+  `vrp_algorithm`   VARCHAR(50) DEFAULT 'NEAREST_NEIGHBOR' COMMENT 'VRP算法名称',
+  `total_distance`  DOUBLE      DEFAULT NULL COMMENT 'VRP规划总距离（米）',
+  `remark`          VARCHAR(300) DEFAULT NULL,
+  `create_time`     DATETIME    DEFAULT CURRENT_TIMESTAMP,
+  `update_time`     DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_batch_no`  (`batch_no`),
+  INDEX `idx_warehouse_id`  (`warehouse_id`),
+  INDEX `idx_hub_id`        (`hub_id`),
+  INDEX `idx_batch_status`  (`batch_status`),
+  INDEX `idx_create_time`   (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='配送批次表';
+
+-- ============================================================
+-- 0-C. 批次订单明细表
+-- ============================================================
+CREATE TABLE `logistics_batch_item` (
+  `id`             BIGINT  NOT NULL AUTO_INCREMENT COMMENT '明细ID',
+  `batch_id`       BIGINT  NOT NULL COMMENT '所属批次ID',
+  `order_id`       BIGINT  NOT NULL COMMENT '订单ID',
+  `route_id`       BIGINT  DEFAULT NULL COMMENT '所属末端路线ID（单订单=单条route；多停靠=组route）',
+  `visit_sequence` INT     NOT NULL DEFAULT 0 COMMENT '批次内全局VRP访问顺序（从1开始）',
+  `stop_sequence`  INT     DEFAULT NULL COMMENT '在同组末端路线内的停靠顺序（从1开始，多停靠时有效）',
+  `end_lat`        DOUBLE  DEFAULT NULL COMMENT '目的地纬度（快照，供地图展示）',
+  `end_lng`        DOUBLE  DEFAULT NULL COMMENT '目的地经度（快照）',
+  `end_address`    VARCHAR(300) DEFAULT NULL COMMENT '目的地地址（快照）',
+  `receiver_name`  VARCHAR(50)  DEFAULT NULL COMMENT '收货人姓名（快照）',
+  `receiver_phone` VARCHAR(20)  DEFAULT NULL COMMENT '收货人电话（快照）',
+  `item_status`    TINYINT NOT NULL DEFAULT 0 COMMENT '状态：0=待激活，1=末端派送中，2=已送达',
+  `create_time`    DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `update_time`    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_batch_id`  (`batch_id`),
+  INDEX `idx_order_id`  (`order_id`),
+  INDEX `idx_route_id`  (`route_id`),
+  INDEX `idx_sequence`  (`batch_id`, `visit_sequence`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='批次订单明细表（每行=一个订单/一个末端停靠点）';
+
+-- 按依赖顺序删除旧表
+DROP TABLE IF EXISTS `logistics_node`;
+DROP TABLE IF EXISTS `logistics_track`;
+DROP TABLE IF EXISTS `logistics_route`;
+
+
+-- ============================================================
+-- 1. 物流路线表
+--    一个订单对应一条物流路线，记录从仓库到收货地址的全程信息
+--    - 地址和坐标均保存快照（下单时冻结）
+--    - planned_route 存储 GeoJSON LineString（GraphHopper 规划结果）
+--    - route_status 驱动整个配送状态机
+-- ============================================================
+CREATE TABLE `logistics_route` (
+  `id`                    BIGINT       NOT NULL AUTO_INCREMENT COMMENT '路线ID（主键）',
+  `route_no`              VARCHAR(30)  NOT NULL UNIQUE COMMENT '路线编号（LR+yyyyMMddHHmmss+4位随机）',
+  -- 单订单路线填 orderId；多停靠末端路线（stop_count>1）为 NULL
+  `order_id`              BIGINT       DEFAULT NULL COMMENT '关联订单ID（单订单路线；多停靠末端路线为NULL，停靠明细见 logistics_batch_item）',
+  `delivery_id`           BIGINT       DEFAULT NULL COMMENT '关联配送记录ID（接单后绑定）',
+  `driver_id`             BIGINT       DEFAULT NULL COMMENT '运输员ID（接单后绑定）',
+  `warehouse_id`          BIGINT       DEFAULT NULL COMMENT '出发仓库ID',
+
+  -- Hub-and-Spoke 扩展字段
+  `batch_id`              BIGINT       DEFAULT NULL COMMENT '所属批次ID（null=单订单模式）',
+  `segment_type`          TINYINT      NOT NULL DEFAULT 0
+                          COMMENT '路线段类型：0=独立单订单，1=干线（仓库→Hub），2=末端（Hub→客户）',
+  `hub_id`                BIGINT       DEFAULT NULL COMMENT '中转站ID（干线路线的终点Hub；末端路线的起点Hub）',
+
+  -- 多停靠点末端路线分组信息（segment_type=2 时有效）
+  `group_index`           TINYINT      DEFAULT NULL COMMENT '批次内末端分组编号（0,1,2...），同一组由一名司机负责',
+  `stop_count`            INT          NOT NULL DEFAULT 1 COMMENT '本路线停靠点数量（1=单订单，>1=多停靠末端路线）',
+  -- 多停靠点有序停靠列表（JSON数组）：[{seq,orderId,address,lat,lng,receiverName,receiverPhone}]
+  `waypoints`             JSON         DEFAULT NULL COMMENT '多停靠点列表（stop_count>1时有效）',
+
+  -- 出发地信息
+  `start_address`         VARCHAR(300) NOT NULL COMMENT '出发地址（仓库/Hub地址快照）',
+  `start_lat`             DOUBLE       DEFAULT NULL COMMENT '出发地纬度',
+  `start_lng`             DOUBLE       DEFAULT NULL COMMENT '出发地经度',
+
+  -- 目的地信息（单订单=收货地；多停靠末端=最后一个停靠点地址）
+  `end_address`           VARCHAR(300) NOT NULL COMMENT '目的地址（单订单=收货地；多停靠=最后一停靠点）',
+  `end_lat`               DOUBLE       DEFAULT NULL COMMENT '目的地纬度',
+  `end_lng`               DOUBLE       DEFAULT NULL COMMENT '目的地经度',
+
+  -- 实时位置（运输中持续更新）
+  `current_lat`           DOUBLE       DEFAULT NULL COMMENT '当前位置纬度',
+  `current_lng`           DOUBLE       DEFAULT NULL COMMENT '当前位置经度',
+  `current_address`       VARCHAR(300) DEFAULT NULL COMMENT '当前位置描述',
+  `last_track_time`       DATETIME     DEFAULT NULL COMMENT '最后一次位置更新时间',
+
+  -- 状态机：-1=待激活，0=待出发，1=运输中，2=已送达，3=异常
+  `route_status`          TINYINT      NOT NULL DEFAULT 0
+                          COMMENT '路线状态：-1=待激活(末端路线)，0=待出发，1=运输中，2=已送达，3=异常',
+
+  -- 时间预估
+  `estimated_arrival_time` DATETIME   DEFAULT NULL COMMENT '预计到达时间',
+  `actual_arrival_time`   DATETIME    DEFAULT NULL COMMENT '实际到达时间',
+
+  -- 路线数据（GeoJSON）
+  `planned_route`         LONGTEXT     DEFAULT NULL COMMENT '计划路线（GeoJSON LineString，由 GraphHopper 生成）',
+
+  -- 收货人信息（单订单路线快照；多停靠末端路线 stop_count>1 时为NULL，详见 waypoints/batch_item）
+  `receiver_name`         VARCHAR(50)  DEFAULT NULL COMMENT '收货人姓名（单订单路线；多停靠为NULL）',
+  `receiver_phone`        VARCHAR(20)  DEFAULT NULL COMMENT '收货人电话（单订单路线；多停靠为NULL）',
+
+  `remark`                VARCHAR(500) DEFAULT NULL COMMENT '备注',
+  `create_time`           DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time`           DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_route_no`   (`route_no`),
+  INDEX `idx_order_id`       (`order_id`),
+  INDEX `idx_driver_id`      (`driver_id`),
+  INDEX `idx_warehouse_id`   (`warehouse_id`),
+  INDEX `idx_route_status`   (`route_status`),
+  INDEX `idx_batch_id`       (`batch_id`),
+  INDEX `idx_segment_type`   (`segment_type`),
+  INDEX `idx_create_time`    (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='物流路线表（单订单/干线/多停靠末端路线共用）';
+
+
+-- ============================================================
+-- 2. 里程碑节点表
+--    路线上的关键节点：出发点（type=0）、途经点（type=1）、目的地（type=2）
+-- ============================================================
+CREATE TABLE `logistics_node` (
+  `id`                    BIGINT       NOT NULL AUTO_INCREMENT COMMENT '节点ID',
+  `route_id`              BIGINT       NOT NULL COMMENT '所属路线ID',
+  `node_type`             TINYINT      NOT NULL COMMENT '节点类型：0=出发点，1=途经点，2=目的地，3=中转站（Hub）',
+  `node_name`             VARCHAR(100) NOT NULL COMMENT '节点名称',
+  `node_address`          VARCHAR(300) DEFAULT NULL COMMENT '节点地址',
+  `latitude`              DOUBLE       DEFAULT NULL COMMENT '节点纬度',
+  `longitude`             DOUBLE       DEFAULT NULL COMMENT '节点经度',
+  `sequence_no`           INT          NOT NULL DEFAULT 0 COMMENT '顺序号（0=出发点，99=目的地）',
+  `planned_arrive_time`   DATETIME     DEFAULT NULL COMMENT '计划到达时间',
+  `actual_arrive_time`    DATETIME     DEFAULT NULL COMMENT '实际到达时间',
+  `node_status`           TINYINT      NOT NULL DEFAULT 0 COMMENT '节点状态：0=未到达，1=已到达，2=已跳过',
+  `remark`                VARCHAR(300) DEFAULT NULL COMMENT '节点备注',
+  `create_time`           DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time`           DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_route_id`    (`route_id`),
+  INDEX `idx_node_type`   (`node_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='里程碑节点表';
+
+
+-- ============================================================
+-- 3. 实时轨迹表
+--    运输员 App 每15~30秒上报一次GPS，高频写入，ROW_FORMAT=COMPRESSED 压缩存储
+-- ============================================================
+CREATE TABLE `logistics_track` (
+  `id`          BIGINT    NOT NULL AUTO_INCREMENT COMMENT '轨迹点ID',
+  `route_id`    BIGINT    NOT NULL COMMENT '所属路线ID',
+  `driver_id`   BIGINT    NOT NULL COMMENT '运输员ID',
+  `latitude`    DOUBLE    NOT NULL COMMENT '纬度',
+  `longitude`   DOUBLE    NOT NULL COMMENT '经度',
+  `altitude`    DOUBLE    DEFAULT NULL COMMENT '海拔（米，可选）',
+  `speed`       DOUBLE    DEFAULT NULL COMMENT '速度（km/h）',
+  `heading`     DOUBLE    DEFAULT NULL COMMENT '方向角（0=正北，顺时针）',
+  `accuracy`    DOUBLE    DEFAULT NULL COMMENT 'GPS精度（米，值越小越精确）',
+  `address`     VARCHAR(300) DEFAULT NULL COMMENT '位置描述（逆地理编码结果，由客户端传入）',
+  `track_time`  DATETIME  NOT NULL COMMENT 'GPS上报时间（客户端本地时间）',
+  `create_time` DATETIME  DEFAULT CURRENT_TIMESTAMP COMMENT '服务端接收时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_route_id_time` (`route_id`, `track_time`),
+  INDEX `idx_driver_id`     (`driver_id`),
+  INDEX `idx_track_time`    (`track_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='实时轨迹点表'
+  ROW_FORMAT=COMPRESSED;
+
+
+-- ============================================================
+-- 测试数据说明
+-- ----------------------------------------------------------------
+-- 完整测试场景：
+--   顾客张三（customer_id=1）在优质食品店（shop_id=1）下单
+--   订单 ORD20260313000001（order_id=1）已支付并发货
+--   从上海华东仓库（warehouse_id=2, 浦东新区物流园区B区2号）发出
+--   配送至上海浦东新区陆家嘴环路1000号（address_id=1）
+--   运输员李四（driver_id=1）驾驶 沪A12345（vehicle_id=1）正在运输中
+--
+-- 坐标范围（均在上海浦东区域，与 shanghai-260310.osm.pbf 匹配）：
+--   上海华东仓库：         lat=31.1985, lng=121.5889
+--   途中-张杨路附近：      lat=31.2100, lng=121.5640
+--   途中-世纪大道附近：    lat=31.2256, lng=121.5350（当前位置）
+--   目的地-陆家嘴环路：    lat=31.2356, lng=121.5050
+--
+-- 可用接口测试：
+--   GET  /api/logistics/routes/1               查路线详情（routeId=1）
+--   GET  /api/logistics/routes/order/1         按订单ID查询（orderId=1）
+--   GET  /api/logistics/routes/no/LR202603131200000001  按物流单号查询
+--   GET  /api/logistics/track/1/latest         查最新轨迹位置
+--   GET  /api/logistics/track/1/history        查完整轨迹历史
+--   POST /api/logistics/routes                 用 order_id=2 创建新路线（触发GraphHopper规划）
+--   PUT  /api/logistics/routes/1/status        更新路线状态（需 admin/driver 角色）
+-- ============================================================
+
+-- 物流路线（route_id=1，运输中，与 order_delivery.id=1 对应）
 INSERT INTO `logistics_route`
-  (`id`, `route_no`, `order_id`, `delivery_id`, `driver_id`, `warehouse_id`,
-   `start_address`, `start_lat`, `start_lng`,
-   `end_address`, `end_lat`, `end_lng`,
-   `current_lat`, `current_lng`, `current_address`, `last_track_time`,
+  (`route_no`, `order_id`, `delivery_id`, `driver_id`, `warehouse_id`,
+   `start_address`,  `start_lat`, `start_lng`,
+   `end_address`,    `end_lat`,   `end_lng`,
+   `current_lat`,    `current_lng`, `current_address`, `last_track_time`,
    `route_status`, `estimated_arrival_time`, `actual_arrival_time`,
-   `receiver_name`, `receiver_phone`, `planned_route`, `create_time`, `update_time`)
+   `planned_route`,
+   `receiver_name`, `receiver_phone`, `remark`, `create_time`)
 VALUES
-(2, 'LR_HIST_0002', 3, 2, 1, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市徐汇区龙华路668号', 31.182, 121.438,
- 31.1820, 121.4380, '上海市徐汇区龙华路668号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:26:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:10:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:28:00'),
- '张三', '13800138000', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '07:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:28:00')),
-(3, 'LR_HIST_0003', 4, 3, 1, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市杨浦区中山北二路800号', 31.255, 121.505,
- 31.2550, 121.5050, '上海市杨浦区中山北二路800号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:19:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:32:00'),
- '张三', '13800138000', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:32:00')),
-(4, 'LR_HIST_0004', 5, 4, 1, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市长宁区虹桥路1号', 31.196, 121.346,
- 31.1960, 121.3460, '上海市长宁区虹桥路1号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '19:31:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:22:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:52:00'),
- '李明', '13900139001', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '17:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:52:00')),
-(5, 'LR_HIST_0005', 6, 5, 2, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市普陀区武威路200号', 31.242, 121.405,
- 31.2420, 121.4050, '上海市普陀区武威路200号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:34:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:50:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:52:00'),
- '李明', '13900139001', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:52:00')),
-(6, 'LR_HIST_0006', 7, 6, 2, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市浦东新区张江高科技园区', 31.2021, 121.6087,
- 31.2021, 121.6087, '上海市浦东新区张江高科技园区', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:06:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:20:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:22:00'),
- '王芳', '13600136002', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:22:00')),
-(7, 'LR_HIST_0007', 8, 7, 1, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市杨浦区中山北二路800号', 31.255, 121.505,
- 31.2550, 121.5050, '上海市杨浦区中山北二路800号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:19:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:32:00'),
- '张三', '13800138000', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:32:00')),
-(8, 'LR_HIST_0008', 9, 8, 2, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市黄浦区南京东路668号', 31.2321, 121.48,
- 31.1987, 121.5185, '上海市黄浦区南京东路668号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 8 DAY), '16:12:00'),
- 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 8 DAY), '16:35:00'), NULL,
- '李明', '13900139001', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 8 DAY), '16:00:00'), NULL),
-(9, 'LR_HIST_0009', 10, 9, 3, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市浦东新区金桥出口加工区', 31.206, 121.64,
- 31.2060, 121.6400, '上海市浦东新区金桥出口加工区', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '09:39:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '09:55:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '10:00:00'),
- '王芳', '13600136002', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '09:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '10:00:00')),
-(10, 'LR_HIST_0010', 11, 10, 3, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市静安区大宁路288号', 31.228, 121.456,
- 31.2280, 121.4560, '上海市静安区大宁路288号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '18:18:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:42:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '18:13:00'),
- '王芳', '13600136002', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '18:13:00')),
-(11, 'LR_HIST_0011', 12, 11, 1, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市黄浦区南京东路668号', 31.2321, 121.48,
- 31.2321, 121.4800, '上海市黄浦区南京东路668号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:23:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:35:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:38:00'),
- '李明', '13900139001', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:38:00')),
-(12, 'LR_HIST_0012', 13, 12, 2, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市徐汇区龙华路668号', 31.182, 121.438,
- 31.1820, 121.4380, '上海市徐汇区龙华路668号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:27:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:40:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:43:00'),
- '张三', '13800138000', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:43:00')),
-(13, 'LR_HIST_0013', 14, 13, 3, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市静安区大宁路288号', 31.228, 121.456,
- 31.2280, 121.4560, '上海市静安区大宁路288号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:56:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:42:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:57:00'),
- '王芳', '13600136002', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:57:00')),
-(14, 'LR_HIST_0014', 15, 14, 1, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市长宁区虹桥路1号', 31.196, 121.346,
- 31.1960, 121.3460, '上海市长宁区虹桥路1号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '20:01:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:52:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '19:18:00'),
- '李明', '13900139001', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '19:18:00')),
-(15, 'LR_HIST_0015', 16, 15, 2, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市杨浦区中山北二路800号', 31.255, 121.505,
- 31.2550, 121.5050, '上海市杨浦区中山北二路800号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:49:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '16:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '16:05:00'),
- '张三', '13800138000', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '16:05:00')),
-(16, 'LR_HIST_0016', 17, 16, 1, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市浦东新区张江高科技园区', 31.2021, 121.6087,
- 31.2021, 121.6087, '上海市浦东新区张江高科技园区', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:39:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:50:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:52:00'),
- '王芳', '13600136002', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:52:00')),
-(17, 'LR_HIST_0017', 18, 17, 3, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市徐汇区龙华路668号', 31.182, 121.438,
- 31.1820, 121.4380, '上海市徐汇区龙华路668号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:27:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:40:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:43:00'),
- '李明', '13900139001', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:43:00')),
-(18, 'LR_HIST_0018', 19, 18, 2, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市静安区南京西路688号', 31.2289, 121.449,
- 31.2289, 121.4490, '上海市静安区南京西路688号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '13:12:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '13:10:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '13:22:00'),
- '张三', '13800138000', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '12:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '13:22:00')),
-(19, 'LR_HIST_0019', 20, 19, 1, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市黄浦区南京东路668号', 31.2321, 121.48,
- 31.2321, 121.4800, '上海市黄浦区南京东路668号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:49:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:35:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:50:00'),
- '李明', '13900139001', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:50:00')),
-(20, 'LR_HIST_0020', 21, 20, 3, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市杨浦区中山北二路800号', 31.255, 121.505,
- 31.2550, 121.5050, '上海市杨浦区中山北二路800号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:26:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:32:00'),
- '王芳', '13600136002', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:32:00')),
-(21, 'LR_HIST_0021', 22, 21, 2, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市浦东新区张江高科技园区', 31.2021, 121.6087,
- 31.2021, 121.6087, '上海市浦东新区张江高科技园区', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:34:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:50:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:53:00'),
- '王芳', '13600136002', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:53:00')),
-(22, 'LR_HIST_0022', 23, 22, 1, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市浦东新区金桥出口加工区', 31.206, 121.64,
- 31.2022, 121.6225, '上海市浦东新区金桥出口加工区', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 22 DAY), '17:48:00'),
- 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 22 DAY), '17:55:00'), NULL,
- '王芳', '13600136002', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 22 DAY), '17:30:00'), NULL),
-(23, 'LR_HIST_0023', 24, 23, 2, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市静安区大宁路288号', 31.228, 121.456,
- 31.2280, 121.4560, '上海市静安区大宁路288号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:27:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:42:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:43:00'),
- '王芳', '13600136002', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:43:00')),
-(24, 'LR_HIST_0024', 25, 24, 3, 2,
- '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
- '上海市普陀区武威路200号', 31.242, 121.405,
- 31.2420, 121.4050, '上海市普陀区武威路200号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:34:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:50:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:53:00'),
- '李明', '13900139001', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:53:00')),
-(25, 'LR_HIST_0025', 26, 25, 1, 1,
- '上海市闵行区元江路426号物流园1号库（上海闵行分拨仓）', 31.0928, 121.4536,
- '上海市浦东新区陆家嘴环路1000号', 31.2356, 121.505,
- 31.2356, 121.5050, '上海市浦东新区陆家嘴环路1000号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:30:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:55:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '10:00:00'),
- '张三', '13800138000', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '10:00:00')),
-(26, 'LR_HIST_0026', 27, 26, 2, 1,
- '上海市闵行区元江路426号物流园1号库（上海闵行分拨仓）', 31.0928, 121.4536,
- '上海市徐汇区龙华路668号', 31.182, 121.438,
- 31.1820, 121.4380, '上海市徐汇区龙华路668号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '14:49:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '15:15:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '15:18:00'),
- '张三', '13800138000', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '14:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '15:18:00')),
-(27, 'LR_HIST_0027', 28, 27, 3, 1,
- '上海市闵行区元江路426号物流园1号库（上海闵行分拨仓）', 31.0928, 121.4536,
- '上海市浦东新区张江高科技园区', 31.2021, 121.6087,
- 31.2021, 121.6087, '上海市浦东新区张江高科技园区', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '11:11:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '11:32:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '11:35:00'),
- '王芳', '13600136002', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '10:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '11:35:00')),
-(28, 'LR_HIST_0028', 29, 28, 3, 3,
- '上海市宝山区富锦路1500号物流园C库（上海宝山分拨仓）', 31.3988, 121.4312,
- '上海市杨浦区中山北二路800号', 31.255, 121.505,
- 31.2550, 121.5050, '上海市杨浦区中山北二路800号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:31:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:50:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:55:00'),
- '王芳', '13600136002', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:55:00')),
-(29, 'LR_HIST_0029', 30, 29, 2, 3,
- '上海市宝山区富锦路1500号物流园C库（上海宝山分拨仓）', 31.3988, 121.4312,
- '上海市长宁区虹桥路1号', 31.196, 121.346,
- 31.1960, 121.3460, '上海市长宁区虹桥路1号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:42:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '14:10:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '14:18:00'),
- '李明', '13900139001', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '14:18:00')),
-(30, 'LR_HIST_0030', 31, 30, 3, 3,
- '上海市宝山区富锦路1500号物流园C库（上海宝山分拨仓）', 31.3988, 121.4312,
- '上海市杨浦区中山北二路800号', 31.255, 121.505,
- 31.3108, 121.4725, '上海市杨浦区中山北二路800号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 30 DAY), '17:52:00'),
- 3, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 30 DAY), '17:50:00'), NULL,
- '张三', '13800138000', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 30 DAY), '17:00:00'), NULL),
-(31, 'LR_HIST_0031', 32, 31, 1, 3,
- '上海市宝山区富锦路1500号物流园C库（上海宝山分拨仓）', 31.3988, 121.4312,
- '上海市徐汇区龙华路668号', 31.182, 121.438,
- 31.1820, 121.4380, '上海市徐汇区龙华路668号', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '10:12:00'),
- 2, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '10:35:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '10:40:00'),
- '李明', '13900139001', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '10:40:00'));
+(
+  'LR202603131200000001',
+  1, 1, 1, 2,
+  -- 出发地：上海华东仓库
+  '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
+  -- 目的地：张三收货地址
+  '上海市浦东新区陆家嘴环路1000号',              31.2356, 121.5050,
+  -- 当前位置：途中世纪大道附近（与最新轨迹点一致）
+  31.2256, 121.5350, '上海市浦东新区世纪大道附近', DATE_SUB(NOW(), INTERVAL 15 MINUTE),
+  -- 状态：运输中；预计45分钟后到达；actual_arrival_time=NULL（未送达）
+  1, DATE_ADD(NOW(), INTERVAL 45 MINUTE), NULL,
+  -- planned_route：GeoJSON LineString（浦东仓库→张杨路→世纪大道→陆家嘴，简化4段路线）
+  '{"type":"LineString","coordinates":[[121.5889,31.1985],[121.5640,31.2100],[121.5350,31.2256],[121.5050,31.2356]]}',
+  '张三', '13800138000', NULL,
+  DATE_SUB(NOW(), INTERVAL 60 MINUTE)           -- 路线创建时间（1小时前）
+);
 
--- 里程碑节点（每条路线出发点+目的地，共60个）
+-- 里程碑节点（route_id=1）
 INSERT INTO `logistics_node`
-  (`route_id`, `node_type`, `node_name`, `node_address`,
-   `latitude`, `longitude`, `sequence_no`,
-   `planned_arrive_time`, `actual_arrive_time`, `node_status`)
+  (`route_id`, `node_type`, `node_name`, `node_address`, `latitude`, `longitude`,
+   `sequence_no`, `planned_arrive_time`, `actual_arrive_time`, `node_status`)
 VALUES
-(2, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '07:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '07:30:00'), 1),
-(2, 2, '收货地址', '上海市徐汇区龙华路668号', 31.182, 121.438, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:10:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:28:00'), 1),
-(3, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:00:00'), 1),
-(3, 2, '收货地址', '上海市杨浦区中山北二路800号', 31.255, 121.505, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:32:00'), 1),
-(4, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '17:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '17:30:00'), 1),
-(4, 2, '收货地址', '上海市长宁区虹桥路1号', 31.196, 121.346, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:22:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:52:00'), 1),
-(5, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:00:00'), 1),
-(5, 2, '收货地址', '上海市普陀区武威路200号', 31.242, 121.405, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:50:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:52:00'), 1),
-(6, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:00:00'), 1),
-(6, 2, '收货地址', '上海市浦东新区张江高科技园区', 31.2021, 121.6087, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:20:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:22:00'), 1),
-(7, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:00:00'), 1),
-(7, 2, '收货地址', '上海市杨浦区中山北二路800号', 31.255, 121.505, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:32:00'), 1),
-(8, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 8 DAY), '16:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 8 DAY), '16:00:00'), 1),
-(8, 2, '收货地址', '上海市黄浦区南京东路668号', 31.2321, 121.48, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 8 DAY), '16:35:00'), NULL, 0),
-(9, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '09:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '09:30:00'), 1),
-(9, 2, '收货地址', '上海市浦东新区金桥出口加工区', 31.206, 121.64, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '09:55:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '10:00:00'), 1),
-(10, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:00:00'), 1),
-(10, 2, '收货地址', '上海市静安区大宁路288号', 31.228, 121.456, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:42:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '18:13:00'), 1),
-(11, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:00:00'), 1),
-(11, 2, '收货地址', '上海市黄浦区南京东路668号', 31.2321, 121.48, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:35:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:38:00'), 1),
-(12, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:00:00'), 1),
-(12, 2, '收货地址', '上海市徐汇区龙华路668号', 31.182, 121.438, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:40:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:43:00'), 1),
-(13, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:00:00'), 1),
-(13, 2, '收货地址', '上海市静安区大宁路288号', 31.228, 121.456, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:42:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:57:00'), 1),
-(14, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:00:00'), 1),
-(14, 2, '收货地址', '上海市长宁区虹桥路1号', 31.196, 121.346, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:52:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '19:18:00'), 1),
-(15, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:30:00'), 1),
-(15, 2, '收货地址', '上海市杨浦区中山北二路800号', 31.255, 121.505, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '16:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '16:05:00'), 1),
-(16, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:30:00'), 1),
-(16, 2, '收货地址', '上海市浦东新区张江高科技园区', 31.2021, 121.6087, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:50:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:52:00'), 1),
-(17, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:00:00'), 1),
-(17, 2, '收货地址', '上海市徐汇区龙华路668号', 31.182, 121.438, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:40:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:43:00'), 1),
-(18, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '12:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '12:30:00'), 1),
-(18, 2, '收货地址', '上海市静安区南京西路688号', 31.2289, 121.449, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '13:10:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '13:22:00'), 1),
-(19, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:00:00'), 1),
-(19, 2, '收货地址', '上海市黄浦区南京东路668号', 31.2321, 121.48, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:35:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:50:00'), 1),
-(20, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:00:00'), 1),
-(20, 2, '收货地址', '上海市杨浦区中山北二路800号', 31.255, 121.505, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:32:00'), 1),
-(21, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:30:00'), 1),
-(21, 2, '收货地址', '上海市浦东新区张江高科技园区', 31.2021, 121.6087, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:50:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:53:00'), 1),
-(22, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 22 DAY), '17:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 22 DAY), '17:30:00'), 1),
-(22, 2, '收货地址', '上海市浦东新区金桥出口加工区', 31.206, 121.64, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 22 DAY), '17:55:00'), NULL, 0),
-(23, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:00:00'), 1),
-(23, 2, '收货地址', '上海市静安区大宁路288号', 31.228, 121.456, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:42:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:43:00'), 1),
-(24, 0, '出发仓库', '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:00:00'), 1),
-(24, 2, '收货地址', '上海市普陀区武威路200号', 31.242, 121.405, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:50:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:53:00'), 1),
-(25, 0, '出发仓库', '上海市闵行区元江路426号物流园1号库（上海闵行分拨仓）', 31.0928, 121.4536, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:00:00'), 1),
-(25, 2, '收货地址', '上海市浦东新区陆家嘴环路1000号', 31.2356, 121.505, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:55:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '10:00:00'), 1),
-(26, 0, '出发仓库', '上海市闵行区元江路426号物流园1号库（上海闵行分拨仓）', 31.0928, 121.4536, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '14:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '14:30:00'), 1),
-(26, 2, '收货地址', '上海市徐汇区龙华路668号', 31.182, 121.438, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '15:15:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '15:18:00'), 1),
-(27, 0, '出发仓库', '上海市闵行区元江路426号物流园1号库（上海闵行分拨仓）', 31.0928, 121.4536, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '10:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '10:30:00'), 1),
-(27, 2, '收货地址', '上海市浦东新区张江高科技园区', 31.2021, 121.6087, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '11:32:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '11:35:00'), 1),
-(28, 0, '出发仓库', '上海市宝山区富锦路1500号物流园C库（上海宝山分拨仓）', 31.3988, 121.4312, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:00:00'), 1),
-(28, 2, '收货地址', '上海市杨浦区中山北二路800号', 31.255, 121.505, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:50:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:55:00'), 1),
-(29, 0, '出发仓库', '上海市宝山区富锦路1500号物流园C库（上海宝山分拨仓）', 31.3988, 121.4312, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:00:00'), 1),
-(29, 2, '收货地址', '上海市长宁区虹桥路1号', 31.196, 121.346, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '14:10:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '14:18:00'), 1),
-(30, 0, '出发仓库', '上海市宝山区富锦路1500号物流园C库（上海宝山分拨仓）', 31.3988, 121.4312, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 30 DAY), '17:00:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 30 DAY), '17:00:00'), 1),
-(30, 2, '收货地址', '上海市杨浦区中山北二路800号', 31.255, 121.505, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 30 DAY), '17:50:00'), NULL, 0),
-(31, 0, '出发仓库', '上海市宝山区富锦路1500号物流园C库（上海宝山分拨仓）', 31.3988, 121.4312, 0, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:30:00'), 1),
-(31, 2, '收货地址', '上海市徐汇区龙华路668号', 31.182, 121.438, 99, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '10:35:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '10:40:00'), 1);
+-- 出发点：已离开仓库
+(1, 0, '出发仓库',
+ '上海市浦东新区物流园区B区2号（上海华东仓库）', 31.1985, 121.5889,
+  0,
+  DATE_SUB(NOW(), INTERVAL 60 MINUTE),   -- 计划1小时前出发
+  DATE_SUB(NOW(), INTERVAL 60 MINUTE),   -- 实际1小时前出发
+  1),                                    -- 已到达（已出发）
+-- 目的地：未到达
+(1, 2, '收货地址',
+ '上海市浦东新区陆家嘴环路1000号', 31.2356, 121.5050,
+  99,
+  DATE_ADD(NOW(), INTERVAL 45 MINUTE),   -- 预计45分钟后到达
+  NULL,
+  0);                                    -- 未到达
 
--- ──────────────────────────────────────────
--- 轨迹点（约 300 条，每条路线 8-14 点）
--- ──────────────────────────────────────────
+-- 实时轨迹（route_id=1）
+-- 本次运输（今日，当前时间附近）+ 历史轨迹（过去30天内不同时段，
+-- 为 selectAvgSpeedByHour 提供当前小时及周边小时的基础样本量）
 INSERT INTO `logistics_track`
   (`route_id`, `driver_id`, `latitude`, `longitude`,
    `altitude`, `speed`, `heading`, `accuracy`, `address`, `track_time`)
 VALUES
-(2, 1, 31.1985, 121.5889, 6.4, 0.0, 265.4, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '07:30:00')),
-(2, 1, 31.1978, 121.5794, 6.4, 20.0, 265.4, 4.5, '上海市合庆路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '07:35:00')),
-(2, 1, 31.1972, 121.5700, 6.4, 20.0, 265.4, 4.5, '上海市高科西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '07:38:00')),
-(2, 1, 31.1963, 121.5600, 6.4, 20.0, 264.3, 4.5, '上海市浦东南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '07:40:00')),
-(2, 1, 31.1955, 121.5500, 6.4, 20.0, 264.3, 4.5, '上海市浦东南路（慢速区）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '07:43:00')),
-(2, 1, 31.1948, 121.5400, 6.4, 20.0, 265.7, 4.5, '上海市商城路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '07:46:00')),
-(2, 1, 31.1942, 121.5300, 6.4, 20.0, 265.7, 4.5, '上海市南浦大桥', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '07:49:00')),
-(2, 1, 31.1937, 121.5225, 6.4, 6.0, 265.5, 4.5, '上海市过桥中', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '07:52:00')),
-(2, 1, 31.1932, 121.5150, 6.4, 6.0, 265.5, 4.5, '上海市徐汇宛平南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:00:00')),
-(2, 1, 31.1925, 121.5050, 6.4, 20.0, 265.3, 4.5, '上海市龙华西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:04:00')),
-(2, 1, 31.1918, 121.4960, 6.4, 20.0, 265.2, 4.5, '上海市龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:07:00')),
-(2, 1, 31.1912, 121.4870, 6.4, 20.0, 265.2, 4.5, '上海市龙华西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:09:00')),
-(2, 1, 31.1903, 121.4790, 6.4, 20.0, 262.9, 4.5, '上海市龙华西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:11:00')),
-(2, 1, 31.1895, 121.4710, 6.4, 20.0, 262.9, 4.5, '上海市龙华西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:14:00')),
-(2, 1, 31.1882, 121.4634, 6.4, 20.0, 258.3, 4.5, '上海市龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:16:00')),
-(2, 1, 31.1868, 121.4558, 6.4, 20.0, 258.3, 4.5, '上海市龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:18:00')),
-(2, 1, 31.1842, 121.4453, 6.4, 20.0, 253.9, 4.5, '上海市龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:21:00')),
-(2, 1, 31.1820, 121.4380, 6.4, 0.0, 250.6, 5.5, '上海市龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 2 DAY), '08:26:00')),
-(3, 1, 31.1985, 121.5889, 6.4, 0.0, 319.8, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:00:00')),
-(3, 1, 31.2065, 121.5810, 6.4, 38.0, 319.8, 4.5, '上海市东方路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:03:00')),
-(3, 1, 31.2110, 121.5760, 6.4, 38.0, 316.5, 4.5, '上海市张杨路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:04:00')),
-(3, 1, 31.2155, 121.5710, 6.4, 38.0, 316.5, 4.5, '上海市昌里路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:05:00')),
-(3, 1, 31.2200, 121.5660, 6.4, 38.0, 316.5, 4.5, '上海市源深路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:06:00')),
-(3, 1, 31.2245, 121.5610, 6.4, 38.0, 316.5, 4.5, '上海市崂山路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:08:00')),
-(3, 1, 31.2290, 121.5560, 6.5, 38.0, 316.5, 4.5, '上海市杨浦大桥', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:09:00')),
-(3, 1, 31.2335, 121.5510, 6.5, 38.0, 316.5, 4.5, '上海市杨浦区进入', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:10:00')),
-(3, 1, 31.2380, 121.5449, 6.5, 38.0, 310.8, 4.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:11:00')),
-(3, 1, 31.2425, 121.5388, 6.5, 38.0, 310.8, 4.5, '上海市杨浦区进入', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:12:00')),
-(3, 1, 31.2458, 121.5301, 6.5, 38.0, 294.4, 4.5, '上海市杨浦区进入', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:14:00')),
-(3, 1, 31.2492, 121.5215, 6.5, 38.0, 294.4, 4.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:15:00')),
-(3, 1, 31.2535, 121.5118, 6.5, 38.0, 297.4, 4.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:17:00')),
-(3, 1, 31.2550, 121.5050, 6.5, 0.0, 284.5, 5.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 3 DAY), '14:19:00')),
-(4, 1, 31.1985, 121.5889, 6.4, 0.0, 264.0, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '17:30:00')),
-(4, 1, 31.1976, 121.5794, 6.4, 14.0, 264.0, 4.5, '上海市向西', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '17:37:00')),
-(4, 1, 31.1968, 121.5700, 6.4, 14.0, 264.0, 4.5, '上海市浦东南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '17:41:00')),
-(4, 1, 31.1958, 121.5595, 6.4, 14.0, 263.6, 4.5, '上海市浦东南路（慢速区）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '17:45:00')),
-(4, 1, 31.1948, 121.5490, 6.4, 14.0, 263.6, 4.5, '上海市南浦大桥入口', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '17:50:00')),
-(4, 1, 31.1939, 121.5380, 6.4, 14.0, 264.5, 4.5, '上海市南浦大桥', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '17:54:00')),
-(4, 1, 31.1930, 121.5270, 6.4, 14.0, 264.5, 4.5, '上海市外环高速', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '17:59:00')),
-(4, 1, 31.1924, 121.5175, 6.4, 5.0, 265.8, 5.5, '上海市外环（高速）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:04:00')),
-(4, 1, 31.1918, 121.5080, 6.4, 5.0, 265.8, 5.5, '上海市外环（高速）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:15:00')),
-(4, 1, 31.1905, 121.4977, 6.4, 14.0, 261.6, 4.5, '上海市长宁', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:22:00')),
-(4, 1, 31.1892, 121.4875, 6.4, 14.0, 261.6, 4.5, '上海市虹桥路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:26:00')),
-(4, 1, 31.1876, 121.4770, 6.4, 14.0, 259.9, 4.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:30:00')),
-(4, 1, 31.1860, 121.4665, 6.4, 14.0, 259.9, 4.5, '上海市虹桥路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:34:00')),
-(4, 1, 31.1855, 121.4557, 6.4, 14.0, 266.9, 4.5, '上海市虹桥路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:39:00')),
-(4, 1, 31.1850, 121.4450, 6.4, 14.0, 266.9, 4.5, '上海市虹桥路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:43:00')),
-(4, 1, 31.1850, 121.4340, 6.4, 14.0, 270.0, 4.5, '上海市虹桥路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:48:00')),
-(4, 1, 31.1850, 121.4230, 6.4, 14.0, 270.0, 4.5, '上海市虹桥路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:52:00')),
-(4, 1, 31.1860, 121.4117, 6.4, 14.0, 275.9, 4.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '18:57:00')),
-(4, 1, 31.1870, 121.4005, 6.4, 14.0, 275.9, 4.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '19:01:00')),
-(4, 1, 31.1908, 121.3893, 6.4, 14.0, 291.3, 4.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '19:06:00')),
-(4, 1, 31.1945, 121.3780, 6.4, 14.0, 291.3, 4.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '19:11:00')),
-(4, 1, 31.1953, 121.3620, 6.4, 14.0, 273.1, 4.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '19:18:00')),
-(4, 1, 31.1960, 121.3460, 6.4, 0.0, 273.1, 5.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 4 DAY), '19:31:00')),
-(5, 2, 31.1985, 121.5889, 6.4, 0.0, 266.5, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:00:00')),
-(5, 2, 31.1980, 121.5794, 6.4, 38.0, 266.5, 4.5, '上海市合庆路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:02:00')),
-(5, 2, 31.1975, 121.5700, 6.4, 38.0, 266.5, 4.5, '上海市浦东南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:04:00')),
-(5, 2, 31.1970, 121.5600, 6.4, 38.0, 266.7, 4.5, '上海市延安路隧道浦东', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:05:00')),
-(5, 2, 31.1965, 121.5500, 6.4, 38.0, 266.7, 4.5, '上海市延安路隧道出口', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:07:00')),
-(5, 2, 31.1962, 121.5390, 6.4, 38.0, 268.5, 4.5, '上海市延安中路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:08:00')),
-(5, 2, 31.1960, 121.5280, 6.4, 38.0, 268.5, 4.5, '上海市延安西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:10:00')),
-(5, 2, 31.1969, 121.5180, 6.4, 20.0, 276.0, 4.5, '上海市曹杨路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:12:00')),
-(5, 2, 31.1978, 121.5080, 6.4, 20.0, 276.0, 4.5, '上海市长寿路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:15:00')),
-(5, 2, 31.2009, 121.4990, 6.4, 38.0, 291.9, 4.5, '上海市云岭东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:17:00')),
-(5, 2, 31.2040, 121.4900, 6.4, 38.0, 291.9, 4.5, '上海市普陀（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:18:00')),
-(5, 2, 31.2078, 121.4809, 6.4, 38.0, 295.7, 4.5, '上海市云岭东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:20:00')),
-(5, 2, 31.2115, 121.4718, 6.4, 38.0, 295.7, 4.5, '上海市云岭东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:21:00')),
-(5, 2, 31.2155, 121.4629, 6.4, 38.0, 297.7, 4.5, '上海市云岭东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:23:00')),
-(5, 2, 31.2195, 121.4540, 6.4, 38.0, 297.7, 4.5, '上海市云岭东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:24:00')),
-(5, 2, 31.2236, 121.4452, 6.4, 38.0, 299.0, 4.5, '上海市云岭东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:26:00')),
-(5, 2, 31.2278, 121.4365, 6.5, 38.0, 299.0, 4.5, '上海市普陀（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:27:00')),
-(5, 2, 31.2318, 121.4282, 6.5, 38.0, 299.6, 4.5, '上海市普陀（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:29:00')),
-(5, 2, 31.2358, 121.4200, 6.5, 38.0, 299.6, 4.5, '上海市普陀（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:30:00')),
-(5, 2, 31.2389, 121.4125, 6.5, 38.0, 295.8, 4.5, '上海市普陀（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:31:00')),
-(5, 2, 31.2420, 121.4050, 6.5, 0.0, 295.8, 5.5, '上海市普陀（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 5 DAY), '10:34:00')),
-(6, 2, 31.1985, 121.5889, 6.4, 0.0, 86.1, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:00:00')),
-(6, 2, 31.1990, 121.5975, 6.4, 28.0, 86.1, 4.5, '上海市外高桥大道', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:03:00')),
-(6, 2, 31.1996, 121.6058, 6.4, 28.0, 85.2, 4.5, '上海市外环路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:05:00')),
-(6, 2, 31.2006, 121.6095, 6.4, 28.0, 72.5, 4.5, '上海市申江路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:06:00')),
-(6, 2, 31.2016, 121.6098, 6.4, 28.0, 14.4, 4.5, '上海市科苑路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:06:00')),
-(6, 2, 31.2021, 121.6087, 6.4, 0.0, 298.0, 5.5, '上海市张江高科（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 6 DAY), '12:06:00')),
-(7, 1, 31.1985, 121.5889, 6.4, 0.0, 319.8, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:00:00')),
-(7, 1, 31.2065, 121.5810, 6.4, 38.0, 319.8, 4.5, '上海市东方路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:03:00')),
-(7, 1, 31.2110, 121.5760, 6.4, 38.0, 316.5, 4.5, '上海市张杨路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:04:00')),
-(7, 1, 31.2155, 121.5710, 6.4, 38.0, 316.5, 4.5, '上海市昌里路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:05:00')),
-(7, 1, 31.2200, 121.5660, 6.4, 38.0, 316.5, 4.5, '上海市源深路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:06:00')),
-(7, 1, 31.2245, 121.5610, 6.4, 38.0, 316.5, 4.5, '上海市崂山路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:08:00')),
-(7, 1, 31.2290, 121.5560, 6.5, 38.0, 316.5, 4.5, '上海市杨浦大桥', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:09:00')),
-(7, 1, 31.2335, 121.5510, 6.5, 38.0, 316.5, 4.5, '上海市杨浦区进入', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:10:00')),
-(7, 1, 31.2380, 121.5449, 6.5, 38.0, 310.8, 4.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:11:00')),
-(7, 1, 31.2425, 121.5388, 6.5, 38.0, 310.8, 4.5, '上海市杨浦区进入', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:12:00')),
-(7, 1, 31.2458, 121.5301, 6.5, 38.0, 294.4, 4.5, '上海市杨浦区进入', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:14:00')),
-(7, 1, 31.2492, 121.5215, 6.5, 38.0, 294.4, 4.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:15:00')),
-(7, 1, 31.2535, 121.5118, 6.5, 38.0, 297.4, 4.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:17:00')),
-(7, 1, 31.2550, 121.5050, 6.5, 0.0, 284.5, 5.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 7 DAY), '15:19:00')),
-(8, 2, 31.1985, 121.5889, 6.4, 0.0, 268.2, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 8 DAY), '16:00:00')),
-(8, 2, 31.1983, 121.5794, 6.4, 38.0, 268.2, 4.5, '上海市向西', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 8 DAY), '16:02:00')),
-(8, 2, 31.1980, 121.5700, 6.4, 38.0, 268.2, 4.5, '上海市浦东南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 8 DAY), '16:04:00')),
-(8, 2, 31.1977, 121.5595, 6.4, 38.0, 268.4, 4.5, '上海市延安路隧道', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 8 DAY), '16:05:00')),
-(8, 2, 31.1975, 121.5490, 6.4, 38.0, 268.4, 4.5, '上海市延安路隧道出口', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 8 DAY), '16:07:00')),
-(8, 2, 31.1974, 121.5380, 6.4, 38.0, 269.1, 4.5, '上海市西藏中路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 8 DAY), '16:09:00')),
-(8, 2, 31.1972, 121.5270, 6.4, 38.0, 269.1, 4.5, '上海市人民广场附近', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 8 DAY), '16:10:00')),
-(9, 3, 31.1985, 121.5889, 6.4, 0.0, 85.7, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '09:30:00')),
-(9, 3, 31.1992, 121.5998, 6.4, 38.0, 85.7, 4.5, '上海市外环路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '09:33:00')),
-(9, 3, 31.2004, 121.6108, 6.4, 38.0, 82.7, 4.5, '上海市浦东大道金桥段', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '09:34:00')),
-(9, 3, 31.2022, 121.6225, 6.4, 38.0, 79.8, 4.5, '上海市金桥路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '09:36:00')),
-(9, 3, 31.2042, 121.6335, 6.4, 38.0, 78.0, 4.5, '上海市金桥工业区', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '09:38:00')),
-(9, 3, 31.2058, 121.6390, 6.4, 38.0, 71.2, 4.5, '上海市金桥加工区', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '09:39:00')),
-(9, 3, 31.2060, 121.6400, 6.4, 0.0, 76.8, 5.5, '上海市金桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 9 DAY), '09:39:00')),
-(10, 3, 31.1985, 121.5889, 6.4, 0.0, 266.8, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:00:00')),
-(10, 3, 31.1980, 121.5785, 6.4, 14.0, 266.8, 4.5, '上海市向西', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:08:00')),
-(10, 3, 31.1975, 121.5680, 6.4, 14.0, 266.8, 4.5, '上海市浦东南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:12:00')),
-(10, 3, 31.1970, 121.5570, 6.4, 14.0, 267.0, 4.5, '上海市延安路隧道浦东', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:17:00')),
-(10, 3, 31.1965, 121.5460, 6.4, 14.0, 267.0, 4.5, '上海市延安路隧道出口', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:21:00')),
-(10, 3, 31.1961, 121.5350, 6.4, 14.0, 267.9, 4.5, '上海市延安中路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:26:00')),
-(10, 3, 31.1958, 121.5240, 6.4, 5.0, 267.9, 5.5, '上海市延安西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:32:00')),
-(10, 3, 31.1966, 121.5145, 6.4, 5.0, 276.0, 5.5, '上海市陕西南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:43:00')),
-(10, 3, 31.1975, 121.5050, 6.4, 14.0, 276.0, 4.5, '上海市大丰路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:49:00')),
-(10, 3, 31.1996, 121.4959, 6.4, 14.0, 285.4, 4.5, '上海市共和新路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:53:00')),
-(10, 3, 31.2018, 121.4868, 6.4, 14.0, 285.4, 4.5, '上海市静安大宁路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '17:57:00')),
-(10, 3, 31.2043, 121.4789, 6.4, 14.0, 290.3, 4.5, '上海市共和新路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '18:00:00')),
-(10, 3, 31.2068, 121.4710, 6.4, 14.0, 290.3, 4.5, '上海市共和新路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '18:04:00')),
-(10, 3, 31.2118, 121.4618, 6.4, 14.0, 302.4, 4.5, '上海市共和新路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '18:08:00')),
-(10, 3, 31.2178, 121.4592, 6.4, 14.0, 339.7, 4.5, '上海市静安大宁路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '18:11:00')),
-(10, 3, 31.2238, 121.4572, 6.4, 14.0, 344.1, 4.5, '上海市静安大宁路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '18:14:00')),
-(10, 3, 31.2280, 121.4560, 6.5, 0.0, 346.3, 5.5, '上海市静安大宁路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '18:18:00')),
-(11, 1, 31.1985, 121.5889, 6.4, 0.0, 268.2, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:00:00')),
-(11, 1, 31.1983, 121.5794, 6.4, 38.0, 268.2, 4.5, '上海市向西', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:02:00')),
-(11, 1, 31.1980, 121.5700, 6.4, 38.0, 268.2, 4.5, '上海市浦东南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:04:00')),
-(11, 1, 31.1977, 121.5595, 6.4, 38.0, 268.4, 4.5, '上海市延安路隧道', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:05:00')),
-(11, 1, 31.1975, 121.5490, 6.4, 38.0, 268.4, 4.5, '上海市延安路隧道出口', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:07:00')),
-(11, 1, 31.1974, 121.5380, 6.4, 38.0, 269.1, 4.5, '上海市西藏中路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:09:00')),
-(11, 1, 31.1972, 121.5270, 6.4, 38.0, 269.1, 4.5, '上海市人民广场附近', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:10:00')),
-(11, 1, 31.1987, 121.5185, 6.4, 20.0, 281.7, 4.5, '上海市近南京东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:12:00')),
-(11, 1, 31.2002, 121.5100, 6.4, 20.0, 281.7, 4.5, '上海市黄浦南京东路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:14:00')),
-(11, 1, 31.2045, 121.5034, 6.4, 38.0, 307.3, 4.5, '上海市近南京东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:16:00')),
-(11, 1, 31.2088, 121.4968, 6.4, 38.0, 307.3, 4.5, '上海市近南京东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:17:00')),
-(11, 1, 31.2140, 121.4926, 6.4, 38.0, 325.7, 4.5, '上海市近南京东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:18:00')),
-(11, 1, 31.2192, 121.4885, 6.4, 38.0, 325.7, 4.5, '上海市黄浦南京东路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:19:00')),
-(11, 1, 31.2278, 121.4832, 6.5, 38.0, 332.2, 4.5, '上海市黄浦南京东路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:21:00')),
-(11, 1, 31.2321, 121.4800, 6.5, 0.0, 327.5, 5.5, '上海市黄浦南京东路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '13:23:00')),
-(12, 2, 31.1985, 121.5889, 6.4, 0.0, 265.4, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:00:00')),
-(12, 2, 31.1978, 121.5794, 6.4, 38.0, 265.4, 4.5, '上海市合庆路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:02:00')),
-(12, 2, 31.1972, 121.5700, 6.4, 38.0, 265.4, 4.5, '上海市高科西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:04:00')),
-(12, 2, 31.1963, 121.5600, 6.4, 38.0, 264.3, 4.5, '上海市浦东南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:05:00')),
-(12, 2, 31.1955, 121.5500, 6.4, 38.0, 264.3, 4.5, '上海市浦东南路（慢速区）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:07:00')),
-(12, 2, 31.1948, 121.5400, 6.4, 38.0, 265.7, 4.5, '上海市商城路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:08:00')),
-(12, 2, 31.1942, 121.5300, 6.4, 38.0, 265.7, 4.5, '上海市南浦大桥', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:10:00')),
-(12, 2, 31.1937, 121.5225, 6.4, 20.0, 265.5, 4.5, '上海市过桥中', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:11:00')),
-(12, 2, 31.1932, 121.5150, 6.4, 20.0, 265.5, 4.5, '上海市徐汇宛平南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:13:00')),
-(12, 2, 31.1925, 121.5050, 6.4, 38.0, 265.3, 4.5, '上海市龙华西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:15:00')),
-(12, 2, 31.1918, 121.4960, 6.4, 38.0, 265.2, 4.5, '上海市龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:17:00')),
-(12, 2, 31.1912, 121.4870, 6.4, 38.0, 265.2, 4.5, '上海市龙华西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:18:00')),
-(12, 2, 31.1903, 121.4790, 6.4, 38.0, 262.9, 4.5, '上海市龙华西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:19:00')),
-(12, 2, 31.1895, 121.4710, 6.4, 38.0, 262.9, 4.5, '上海市龙华西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:21:00')),
-(12, 2, 31.1882, 121.4634, 6.4, 38.0, 258.3, 4.5, '上海市龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:22:00')),
-(12, 2, 31.1868, 121.4558, 6.4, 38.0, 258.3, 4.5, '上海市龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:23:00')),
-(12, 2, 31.1842, 121.4453, 6.4, 38.0, 253.9, 4.5, '上海市龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:25:00')),
-(12, 2, 31.1820, 121.4380, 6.4, 0.0, 250.6, 5.5, '上海市龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '09:27:00')),
-(13, 3, 31.1985, 121.5889, 6.4, 0.0, 266.8, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:00:00')),
-(13, 3, 31.1980, 121.5785, 6.4, 20.0, 266.8, 4.5, '上海市向西', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:05:00')),
-(13, 3, 31.1975, 121.5680, 6.4, 20.0, 266.8, 4.5, '上海市浦东南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:08:00')),
-(13, 3, 31.1970, 121.5570, 6.4, 20.0, 267.0, 4.5, '上海市延安路隧道浦东', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:12:00')),
-(13, 3, 31.1965, 121.5460, 6.4, 20.0, 267.0, 4.5, '上海市延安路隧道出口', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:15:00')),
-(13, 3, 31.1961, 121.5350, 6.4, 20.0, 267.9, 4.5, '上海市延安中路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:18:00')),
-(13, 3, 31.1958, 121.5240, 6.4, 6.0, 267.9, 4.5, '上海市延安西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:23:00')),
-(13, 3, 31.1966, 121.5145, 6.4, 6.0, 276.0, 4.5, '上海市陕西南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:32:00')),
-(13, 3, 31.1975, 121.5050, 6.4, 20.0, 276.0, 4.5, '上海市大丰路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:36:00')),
-(13, 3, 31.1996, 121.4959, 6.4, 20.0, 285.4, 4.5, '上海市共和新路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:39:00')),
-(13, 3, 31.2018, 121.4868, 6.4, 20.0, 285.4, 4.5, '上海市静安大宁路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:41:00')),
-(13, 3, 31.2043, 121.4789, 6.4, 20.0, 290.3, 4.5, '上海市共和新路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:44:00')),
-(13, 3, 31.2068, 121.4710, 6.4, 20.0, 290.3, 4.5, '上海市共和新路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:46:00')),
-(13, 3, 31.2118, 121.4618, 6.4, 20.0, 302.4, 4.5, '上海市共和新路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:49:00')),
-(13, 3, 31.2178, 121.4592, 6.4, 20.0, 339.7, 4.5, '上海市静安大宁路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:51:00')),
-(13, 3, 31.2238, 121.4572, 6.4, 20.0, 344.1, 4.5, '上海市静安大宁路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:54:00')),
-(13, 3, 31.2280, 121.4560, 6.5, 0.0, 346.3, 5.5, '上海市静安大宁路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 13 DAY), '08:56:00')),
-(14, 1, 31.1985, 121.5889, 6.4, 0.0, 264.0, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:00:00')),
-(14, 1, 31.1976, 121.5794, 6.4, 14.0, 264.0, 4.5, '上海市向西', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:07:00')),
-(14, 1, 31.1968, 121.5700, 6.4, 14.0, 264.0, 4.5, '上海市浦东南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:11:00')),
-(14, 1, 31.1958, 121.5595, 6.4, 14.0, 263.6, 4.5, '上海市浦东南路（慢速区）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:15:00')),
-(14, 1, 31.1948, 121.5490, 6.4, 14.0, 263.6, 4.5, '上海市南浦大桥入口', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:20:00')),
-(14, 1, 31.1939, 121.5380, 6.4, 14.0, 264.5, 4.5, '上海市南浦大桥', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:24:00')),
-(14, 1, 31.1930, 121.5270, 6.4, 14.0, 264.5, 4.5, '上海市外环高速', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:29:00')),
-(14, 1, 31.1924, 121.5175, 6.4, 5.0, 265.8, 5.5, '上海市外环（高速）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:34:00')),
-(14, 1, 31.1918, 121.5080, 6.4, 5.0, 265.8, 5.5, '上海市外环（高速）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:45:00')),
-(14, 1, 31.1905, 121.4977, 6.4, 14.0, 261.6, 4.5, '上海市长宁', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:52:00')),
-(14, 1, 31.1892, 121.4875, 6.4, 14.0, 261.6, 4.5, '上海市虹桥路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '18:56:00')),
-(14, 1, 31.1876, 121.4770, 6.4, 14.0, 259.9, 4.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '19:00:00')),
-(14, 1, 31.1860, 121.4665, 6.4, 14.0, 259.9, 4.5, '上海市虹桥路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '19:04:00')),
-(14, 1, 31.1855, 121.4557, 6.4, 14.0, 266.9, 4.5, '上海市虹桥路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '19:09:00')),
-(14, 1, 31.1850, 121.4450, 6.4, 14.0, 266.9, 4.5, '上海市虹桥路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '19:13:00')),
-(14, 1, 31.1850, 121.4340, 6.4, 14.0, 270.0, 4.5, '上海市虹桥路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '19:18:00')),
-(14, 1, 31.1850, 121.4230, 6.4, 14.0, 270.0, 4.5, '上海市虹桥路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '19:22:00')),
-(14, 1, 31.1860, 121.4117, 6.4, 14.0, 275.9, 4.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '19:27:00')),
-(14, 1, 31.1870, 121.4005, 6.4, 14.0, 275.9, 4.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '19:31:00')),
-(14, 1, 31.1908, 121.3893, 6.4, 14.0, 291.3, 4.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '19:36:00')),
-(14, 1, 31.1945, 121.3780, 6.4, 14.0, 291.3, 4.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '19:41:00')),
-(14, 1, 31.1953, 121.3620, 6.4, 14.0, 273.1, 4.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '19:48:00')),
-(14, 1, 31.1960, 121.3460, 6.4, 0.0, 273.1, 5.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '20:01:00')),
-(15, 2, 31.1985, 121.5889, 6.4, 0.0, 319.8, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:30:00')),
-(15, 2, 31.2065, 121.5810, 6.4, 38.0, 319.8, 4.5, '上海市东方路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:33:00')),
-(15, 2, 31.2110, 121.5760, 6.4, 38.0, 316.5, 4.5, '上海市张杨路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:34:00')),
-(15, 2, 31.2155, 121.5710, 6.4, 38.0, 316.5, 4.5, '上海市昌里路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:35:00')),
-(15, 2, 31.2200, 121.5660, 6.4, 38.0, 316.5, 4.5, '上海市源深路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:36:00')),
-(15, 2, 31.2245, 121.5610, 6.4, 38.0, 316.5, 4.5, '上海市崂山路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:38:00')),
-(15, 2, 31.2290, 121.5560, 6.5, 38.0, 316.5, 4.5, '上海市杨浦大桥', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:39:00')),
-(15, 2, 31.2335, 121.5510, 6.5, 38.0, 316.5, 4.5, '上海市杨浦区进入', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:40:00')),
-(15, 2, 31.2380, 121.5449, 6.5, 38.0, 310.8, 4.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:41:00')),
-(15, 2, 31.2425, 121.5388, 6.5, 38.0, 310.8, 4.5, '上海市杨浦区进入', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:42:00')),
-(15, 2, 31.2458, 121.5301, 6.5, 38.0, 294.4, 4.5, '上海市杨浦区进入', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:44:00')),
-(15, 2, 31.2492, 121.5215, 6.5, 38.0, 294.4, 4.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:45:00')),
-(15, 2, 31.2535, 121.5118, 6.5, 38.0, 297.4, 4.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:47:00')),
-(15, 2, 31.2550, 121.5050, 6.5, 0.0, 284.5, 5.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '15:49:00')),
-(16, 1, 31.1985, 121.5889, 6.4, 0.0, 86.1, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:30:00')),
-(16, 1, 31.1990, 121.5975, 6.4, 20.0, 86.1, 4.5, '上海市外高桥大道', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:34:00')),
-(16, 1, 31.1996, 121.6058, 6.4, 20.0, 85.2, 4.5, '上海市外环路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:37:00')),
-(16, 1, 31.2006, 121.6095, 6.4, 20.0, 72.5, 4.5, '上海市申江路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:38:00')),
-(16, 1, 31.2016, 121.6098, 6.4, 20.0, 14.4, 4.5, '上海市科苑路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:38:00')),
-(16, 1, 31.2021, 121.6087, 6.4, 0.0, 298.0, 5.5, '上海市张江高科（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 16 DAY), '08:39:00')),
-(17, 3, 31.1985, 121.5889, 6.4, 0.0, 265.4, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:00:00')),
-(17, 3, 31.1978, 121.5794, 6.4, 38.0, 265.4, 4.5, '上海市合庆路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:02:00')),
-(17, 3, 31.1972, 121.5700, 6.4, 38.0, 265.4, 4.5, '上海市高科西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:04:00')),
-(17, 3, 31.1963, 121.5600, 6.4, 38.0, 264.3, 4.5, '上海市浦东南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:05:00')),
-(17, 3, 31.1955, 121.5500, 6.4, 38.0, 264.3, 4.5, '上海市浦东南路（慢速区）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:07:00')),
-(17, 3, 31.1948, 121.5400, 6.4, 38.0, 265.7, 4.5, '上海市商城路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:08:00')),
-(17, 3, 31.1942, 121.5300, 6.4, 38.0, 265.7, 4.5, '上海市南浦大桥', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:10:00')),
-(17, 3, 31.1937, 121.5225, 6.4, 20.0, 265.5, 4.5, '上海市过桥中', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:11:00')),
-(17, 3, 31.1932, 121.5150, 6.4, 20.0, 265.5, 4.5, '上海市徐汇宛平南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:13:00')),
-(17, 3, 31.1925, 121.5050, 6.4, 38.0, 265.3, 4.5, '上海市龙华西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:15:00')),
-(17, 3, 31.1918, 121.4960, 6.4, 38.0, 265.2, 4.5, '上海市龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:17:00')),
-(17, 3, 31.1912, 121.4870, 6.4, 38.0, 265.2, 4.5, '上海市龙华西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:18:00')),
-(17, 3, 31.1903, 121.4790, 6.4, 38.0, 262.9, 4.5, '上海市龙华西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:19:00')),
-(17, 3, 31.1895, 121.4710, 6.4, 38.0, 262.9, 4.5, '上海市龙华西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:21:00')),
-(17, 3, 31.1882, 121.4634, 6.4, 38.0, 258.3, 4.5, '上海市龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:22:00')),
-(17, 3, 31.1868, 121.4558, 6.4, 38.0, 258.3, 4.5, '上海市龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:23:00')),
-(17, 3, 31.1842, 121.4453, 6.4, 38.0, 253.9, 4.5, '上海市龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:25:00')),
-(17, 3, 31.1820, 121.4380, 6.4, 0.0, 250.6, 5.5, '上海市龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 17 DAY), '09:27:00')),
-(18, 2, 31.1985, 121.5889, 6.4, 0.0, 267.4, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '12:30:00')),
-(18, 2, 31.1981, 121.5785, 6.4, 28.0, 267.4, 4.5, '上海市合庆路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '12:34:00')),
-(18, 2, 31.1977, 121.5680, 6.4, 28.0, 267.4, 4.5, '上海市浦东南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '12:36:00')),
-(18, 2, 31.1972, 121.5570, 6.4, 28.0, 267.0, 4.5, '上海市延安路隧道浦东', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '12:38:00')),
-(18, 2, 31.1967, 121.5460, 6.4, 28.0, 267.0, 4.5, '上海市延安路隧道出口', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '12:40:00')),
-(18, 2, 31.1964, 121.5350, 6.4, 28.0, 267.9, 4.5, '上海市延安中路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '12:43:00')),
-(18, 2, 31.1960, 121.5240, 6.4, 10.0, 267.9, 4.5, '上海市延安西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '12:46:00')),
-(18, 2, 31.1969, 121.5151, 6.4, 10.0, 276.7, 4.5, '上海市华山路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '12:51:00')),
-(18, 2, 31.1978, 121.5062, 6.4, 10.0, 276.7, 4.5, '上海市近南京西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '12:56:00')),
-(18, 2, 31.2002, 121.4972, 6.4, 28.0, 287.0, 4.5, '上海市静安南京西路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '12:59:00')),
-(18, 2, 31.2025, 121.4882, 6.4, 28.0, 287.0, 4.5, '上海市近南京西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '13:01:00')),
-(18, 2, 31.2063, 121.4802, 6.4, 28.0, 298.7, 4.5, '上海市近南京西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '13:03:00')),
-(18, 2, 31.2100, 121.4722, 6.4, 28.0, 298.7, 4.5, '上海市近南京西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '13:05:00')),
-(18, 2, 31.2140, 121.4659, 6.4, 28.0, 306.4, 4.5, '上海市近南京西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '13:06:00')),
-(18, 2, 31.2180, 121.4595, 6.4, 28.0, 306.4, 4.5, '上海市静安南京西路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '13:08:00')),
-(18, 2, 31.2216, 121.4548, 6.4, 28.0, 311.5, 4.5, '上海市静安南京西路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '13:09:00')),
-(18, 2, 31.2252, 121.4500, 6.5, 28.0, 311.6, 4.5, '上海市静安南京西路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '13:10:00')),
-(18, 2, 31.2289, 121.4490, 6.5, 0.0, 347.0, 5.5, '上海市静安南京西路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 18 DAY), '13:12:00')),
-(19, 1, 31.1985, 121.5889, 6.4, 0.0, 268.2, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:00:00')),
-(19, 1, 31.1983, 121.5794, 6.4, 20.0, 268.2, 4.5, '上海市向西', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:05:00')),
-(19, 1, 31.1980, 121.5700, 6.4, 20.0, 268.2, 4.5, '上海市浦东南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:08:00')),
-(19, 1, 31.1977, 121.5595, 6.4, 20.0, 268.4, 4.5, '上海市延安路隧道', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:11:00')),
-(19, 1, 31.1975, 121.5490, 6.4, 20.0, 268.4, 4.5, '上海市延安路隧道出口', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:14:00')),
-(19, 1, 31.1974, 121.5380, 6.4, 20.0, 269.1, 4.5, '上海市西藏中路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:17:00')),
-(19, 1, 31.1972, 121.5270, 6.4, 20.0, 269.1, 4.5, '上海市人民广场附近', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:20:00')),
-(19, 1, 31.1987, 121.5185, 6.4, 6.0, 281.7, 4.5, '上海市近南京东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:24:00')),
-(19, 1, 31.2002, 121.5100, 6.4, 6.0, 281.7, 4.5, '上海市黄浦南京东路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:32:00')),
-(19, 1, 31.2045, 121.5034, 6.4, 20.0, 307.3, 4.5, '上海市近南京东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:36:00')),
-(19, 1, 31.2088, 121.4968, 6.4, 20.0, 307.3, 4.5, '上海市近南京东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:38:00')),
-(19, 1, 31.2140, 121.4926, 6.4, 20.0, 325.7, 4.5, '上海市近南京东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:40:00')),
-(19, 1, 31.2192, 121.4885, 6.4, 20.0, 325.7, 4.5, '上海市黄浦南京东路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:42:00')),
-(19, 1, 31.2278, 121.4832, 6.5, 20.0, 332.2, 4.5, '上海市黄浦南京东路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:45:00')),
-(19, 1, 31.2321, 121.4800, 6.5, 0.0, 327.5, 5.5, '上海市黄浦南京东路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 19 DAY), '07:49:00')),
-(20, 3, 31.1985, 121.5889, 6.4, 0.0, 319.8, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:00:00')),
-(20, 3, 31.2065, 121.5810, 6.4, 28.0, 319.8, 4.5, '上海市东方路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:04:00')),
-(20, 3, 31.2110, 121.5760, 6.4, 28.0, 316.5, 4.5, '上海市张杨路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:06:00')),
-(20, 3, 31.2155, 121.5710, 6.4, 28.0, 316.5, 4.5, '上海市昌里路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:07:00')),
-(20, 3, 31.2200, 121.5660, 6.4, 28.0, 316.5, 4.5, '上海市源深路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:09:00')),
-(20, 3, 31.2245, 121.5610, 6.4, 28.0, 316.5, 4.5, '上海市崂山路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:10:00')),
-(20, 3, 31.2290, 121.5560, 6.5, 28.0, 316.5, 4.5, '上海市杨浦大桥', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:12:00')),
-(20, 3, 31.2335, 121.5510, 6.5, 28.0, 316.5, 4.5, '上海市杨浦区进入', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:13:00')),
-(20, 3, 31.2380, 121.5449, 6.5, 28.0, 310.8, 4.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:15:00')),
-(20, 3, 31.2425, 121.5388, 6.5, 28.0, 310.8, 4.5, '上海市杨浦区进入', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:17:00')),
-(20, 3, 31.2458, 121.5301, 6.5, 28.0, 294.4, 4.5, '上海市杨浦区进入', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:19:00')),
-(20, 3, 31.2492, 121.5215, 6.5, 28.0, 294.4, 4.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:21:00')),
-(20, 3, 31.2535, 121.5118, 6.5, 28.0, 297.4, 4.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:23:00')),
-(20, 3, 31.2550, 121.5050, 6.5, 0.0, 284.5, 5.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '11:26:00')),
-(21, 2, 31.1985, 121.5889, 6.4, 0.0, 86.1, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:30:00')),
-(21, 2, 31.1990, 121.5975, 6.4, 38.0, 86.1, 4.5, '上海市外高桥大道', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:32:00')),
-(21, 2, 31.1996, 121.6058, 6.4, 38.0, 85.2, 4.5, '上海市外环路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:33:00')),
-(21, 2, 31.2006, 121.6095, 6.4, 38.0, 72.5, 4.5, '上海市申江路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:34:00')),
-(21, 2, 31.2016, 121.6098, 6.4, 38.0, 14.4, 4.5, '上海市科苑路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:34:00')),
-(21, 2, 31.2021, 121.6087, 6.4, 0.0, 298.0, 5.5, '上海市张江高科（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 21 DAY), '13:34:00')),
-(22, 1, 31.1985, 121.5889, 6.4, 0.0, 85.7, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 22 DAY), '17:30:00')),
-(22, 1, 31.1992, 121.5998, 6.4, 14.0, 85.7, 4.5, '上海市外环路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 22 DAY), '17:38:00')),
-(22, 1, 31.2004, 121.6108, 6.4, 14.0, 82.7, 4.5, '上海市浦东大道金桥段', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 22 DAY), '17:43:00')),
-(23, 2, 31.1985, 121.5889, 6.4, 0.0, 266.8, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:00:00')),
-(23, 2, 31.1980, 121.5785, 6.4, 38.0, 266.8, 4.5, '上海市向西', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:03:00')),
-(23, 2, 31.1975, 121.5680, 6.4, 38.0, 266.8, 4.5, '上海市浦东南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:04:00')),
-(23, 2, 31.1970, 121.5570, 6.4, 38.0, 267.0, 4.5, '上海市延安路隧道浦东', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:06:00')),
-(23, 2, 31.1965, 121.5460, 6.4, 38.0, 267.0, 4.5, '上海市延安路隧道出口', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:08:00')),
-(23, 2, 31.1961, 121.5350, 6.4, 38.0, 267.9, 4.5, '上海市延安中路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:09:00')),
-(23, 2, 31.1958, 121.5240, 6.4, 20.0, 267.9, 4.5, '上海市延安西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:11:00')),
-(23, 2, 31.1966, 121.5145, 6.4, 20.0, 276.0, 4.5, '上海市陕西南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:14:00')),
-(23, 2, 31.1975, 121.5050, 6.4, 38.0, 276.0, 4.5, '上海市大丰路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:16:00')),
-(23, 2, 31.1996, 121.4959, 6.4, 38.0, 285.4, 4.5, '上海市共和新路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:17:00')),
-(23, 2, 31.2018, 121.4868, 6.4, 38.0, 285.4, 4.5, '上海市静安大宁路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:19:00')),
-(23, 2, 31.2043, 121.4789, 6.4, 38.0, 290.3, 4.5, '上海市共和新路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:20:00')),
-(23, 2, 31.2068, 121.4710, 6.4, 38.0, 290.3, 4.5, '上海市共和新路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:21:00')),
-(23, 2, 31.2118, 121.4618, 6.4, 38.0, 302.4, 4.5, '上海市共和新路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:23:00')),
-(23, 2, 31.2178, 121.4592, 6.4, 38.0, 339.7, 4.5, '上海市静安大宁路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:24:00')),
-(23, 2, 31.2238, 121.4572, 6.4, 38.0, 344.1, 4.5, '上海市静安大宁路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:25:00')),
-(23, 2, 31.2280, 121.4560, 6.5, 0.0, 346.3, 5.5, '上海市静安大宁路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 23 DAY), '09:27:00')),
-(24, 3, 31.1985, 121.5889, 6.4, 0.0, 266.5, 5.5, '上海市仓库出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:00:00')),
-(24, 3, 31.1980, 121.5794, 6.4, 38.0, 266.5, 4.5, '上海市合庆路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:02:00')),
-(24, 3, 31.1975, 121.5700, 6.4, 38.0, 266.5, 4.5, '上海市浦东南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:04:00')),
-(24, 3, 31.1970, 121.5600, 6.4, 38.0, 266.7, 4.5, '上海市延安路隧道浦东', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:05:00')),
-(24, 3, 31.1965, 121.5500, 6.4, 38.0, 266.7, 4.5, '上海市延安路隧道出口', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:07:00')),
-(24, 3, 31.1962, 121.5390, 6.4, 38.0, 268.5, 4.5, '上海市延安中路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:08:00')),
-(24, 3, 31.1960, 121.5280, 6.4, 38.0, 268.5, 4.5, '上海市延安西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:10:00')),
-(24, 3, 31.1969, 121.5180, 6.4, 20.0, 276.0, 4.5, '上海市曹杨路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:12:00')),
-(24, 3, 31.1978, 121.5080, 6.4, 20.0, 276.0, 4.5, '上海市长寿路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:15:00')),
-(24, 3, 31.2009, 121.4990, 6.4, 38.0, 291.9, 4.5, '上海市云岭东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:17:00')),
-(24, 3, 31.2040, 121.4900, 6.4, 38.0, 291.9, 4.5, '上海市普陀（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:18:00')),
-(24, 3, 31.2078, 121.4809, 6.4, 38.0, 295.7, 4.5, '上海市云岭东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:20:00')),
-(24, 3, 31.2115, 121.4718, 6.4, 38.0, 295.7, 4.5, '上海市云岭东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:21:00')),
-(24, 3, 31.2155, 121.4629, 6.4, 38.0, 297.7, 4.5, '上海市云岭东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:23:00')),
-(24, 3, 31.2195, 121.4540, 6.4, 38.0, 297.7, 4.5, '上海市云岭东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:24:00')),
-(24, 3, 31.2236, 121.4452, 6.4, 38.0, 299.0, 4.5, '上海市云岭东路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:26:00')),
-(24, 3, 31.2278, 121.4365, 6.5, 38.0, 299.0, 4.5, '上海市普陀（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:27:00')),
-(24, 3, 31.2318, 121.4282, 6.5, 38.0, 299.6, 4.5, '上海市普陀（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:29:00')),
-(24, 3, 31.2358, 121.4200, 6.5, 38.0, 299.6, 4.5, '上海市普陀（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:30:00')),
-(24, 3, 31.2389, 121.4125, 6.5, 38.0, 295.8, 4.5, '上海市普陀（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:31:00')),
-(24, 3, 31.2420, 121.4050, 6.5, 0.0, 295.8, 5.5, '上海市普陀（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 24 DAY), '16:34:00')),
-(25, 1, 31.0928, 121.4536, 6.2, 0.0, 357.6, 5.5, '上海市闵行仓出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:00:00')),
-(25, 1, 31.1042, 121.4530, 6.2, 38.0, 357.6, 4.5, '上海市元江路北段', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:03:00')),
-(25, 1, 31.1155, 121.4525, 6.2, 38.0, 357.6, 4.5, '上海市中春路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:05:00')),
-(25, 1, 31.1270, 121.4530, 6.3, 38.0, 2.1, 4.5, '上海市中环漕宝路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:08:00')),
-(25, 1, 31.1385, 121.4535, 6.3, 38.0, 2.1, 4.5, '上海市华泾', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:10:00')),
-(25, 1, 31.1498, 121.4572, 6.3, 38.0, 15.5, 4.5, '上海市卢浦大桥附近', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:12:00')),
-(25, 1, 31.1610, 121.4608, 6.3, 38.0, 15.5, 4.5, '上海市进入黄浦', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:14:00')),
-(25, 1, 31.1718, 121.4680, 6.3, 38.0, 29.8, 4.5, '上海市近陆家嘴', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:16:00')),
-(25, 1, 31.1825, 121.4752, 6.4, 38.0, 29.8, 4.5, '上海市陆家嘴（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:18:00')),
-(25, 1, 31.1928, 121.4832, 6.4, 38.0, 33.5, 4.5, '上海市近陆家嘴', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:20:00')),
-(25, 1, 31.2032, 121.4912, 6.4, 38.0, 33.5, 4.5, '上海市近陆家嘴', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:22:00')),
-(25, 1, 31.2090, 121.4959, 6.4, 38.0, 34.4, 4.5, '上海市近陆家嘴', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:24:00')),
-(25, 1, 31.2148, 121.5005, 6.4, 38.0, 34.4, 4.5, '上海市陆家嘴（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:25:00')),
-(25, 1, 31.2203, 121.5019, 6.4, 38.0, 11.9, 4.5, '上海市陆家嘴（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:26:00')),
-(25, 1, 31.2258, 121.5032, 6.5, 38.0, 11.9, 4.5, '上海市陆家嘴（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:27:00')),
-(25, 1, 31.2356, 121.5050, 6.5, 0.0, 8.9, 5.5, '上海市陆家嘴（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 25 DAY), '09:30:00')),
-(26, 2, 31.0928, 121.4536, 6.2, 0.0, 348.0, 5.5, '上海市闵行仓出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '14:30:00')),
-(26, 2, 31.1016, 121.4514, 6.2, 38.0, 348.0, 4.5, '上海市沪闵路北段', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '14:33:00')),
-(26, 2, 31.1105, 121.4492, 6.2, 38.0, 348.0, 4.5, '上海市龙吴路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '14:34:00')),
-(26, 2, 31.1217, 121.4472, 6.2, 38.0, 351.3, 4.5, '上海市徐汇区南段', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '14:36:00')),
-(26, 2, 31.1330, 121.4452, 6.3, 38.0, 351.3, 4.5, '上海市龙华西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '14:38:00')),
-(26, 2, 31.1444, 121.4442, 6.3, 38.0, 355.7, 4.5, '上海市徐汇龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '14:40:00')),
-(26, 2, 31.1558, 121.4432, 6.3, 38.0, 355.7, 4.5, '上海市龙华西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '14:42:00')),
-(26, 2, 31.1641, 121.4426, 6.3, 38.0, 356.5, 4.5, '上海市龙华西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '14:44:00')),
-(26, 2, 31.1725, 121.4420, 6.3, 38.0, 356.5, 4.5, '上海市徐汇龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '14:45:00')),
-(26, 2, 31.1820, 121.4380, 6.4, 0.0, 340.2, 5.5, '上海市徐汇龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 26 DAY), '14:49:00')),
-(27, 3, 31.0928, 121.4536, 6.2, 0.0, 20.2, 5.5, '上海市闵行仓出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '10:30:00')),
-(27, 3, 31.1067, 121.4596, 6.2, 38.0, 20.2, 4.5, '上海市中环北段', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '10:35:00')),
-(27, 3, 31.1205, 121.4655, 6.2, 38.0, 20.2, 4.5, '上海市徐汇-黄浦界', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '10:37:00')),
-(27, 3, 31.1307, 121.4707, 6.3, 38.0, 23.6, 4.5, '上海市进入黄浦', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '10:39:00')),
-(27, 3, 31.1410, 121.4760, 6.3, 38.0, 23.6, 4.5, '上海市浦东南路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '10:41:00')),
-(27, 3, 31.1512, 121.4812, 6.3, 38.0, 23.6, 4.5, '上海市向东', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '10:43:00')),
-(27, 3, 31.1616, 121.4872, 6.3, 38.0, 26.2, 4.5, '上海市外环附近', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '10:45:00')),
-(27, 3, 31.1721, 121.4932, 6.3, 38.0, 26.2, 4.5, '上海市张江方向', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '10:47:00')),
-(27, 3, 31.1825, 121.4992, 6.4, 38.0, 26.2, 4.5, '上海市科苑路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '10:49:00')),
-(27, 3, 31.1917, 121.5100, 6.4, 20.0, 45.0, 4.5, '上海市张江高科（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '10:52:00')),
-(27, 3, 31.2010, 121.5208, 6.4, 20.0, 45.0, 4.5, '上海市科苑路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '10:57:00')),
-(27, 3, 31.2005, 121.5354, 6.4, 38.0, 92.3, 4.5, '上海市科苑路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '11:00:00')),
-(27, 3, 31.2000, 121.5500, 6.4, 38.0, 92.3, 4.5, '上海市科苑路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '11:02:00')),
-(27, 3, 31.1999, 121.5654, 6.4, 38.0, 90.4, 4.5, '上海市科苑路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '11:04:00')),
-(27, 3, 31.1998, 121.5808, 6.4, 38.0, 90.4, 4.5, '上海市张江高科（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '11:06:00')),
-(27, 3, 31.2002, 121.5908, 6.4, 38.0, 87.7, 4.5, '上海市张江高科（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '11:08:00')),
-(27, 3, 31.2005, 121.6008, 6.4, 38.0, 87.7, 4.5, '上海市张江高科（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '11:09:00')),
-(27, 3, 31.2016, 121.6065, 6.4, 38.0, 77.3, 4.5, '上海市张江高科（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '11:10:00')),
-(27, 3, 31.2021, 121.6087, 6.4, 0.0, 75.1, 5.5, '上海市张江高科（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 27 DAY), '11:11:00')),
-(28, 3, 31.3988, 121.4312, 6.8, 0.0, 159.6, 5.5, '上海市宝山仓出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:00:00')),
-(28, 3, 31.3847, 121.4374, 6.8, 38.0, 159.6, 4.5, '上海市逸仙路南段', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:05:00')),
-(28, 3, 31.3705, 121.4435, 6.7, 38.0, 159.6, 4.5, '上海市共和新路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:07:00')),
-(28, 3, 31.3557, 121.4496, 6.7, 38.0, 160.5, 4.5, '上海市内环沪太', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:10:00')),
-(28, 3, 31.3408, 121.4558, 6.7, 38.0, 160.5, 4.5, '上海市中山北路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:13:00')),
-(28, 3, 31.3308, 121.4614, 6.7, 38.0, 154.6, 4.5, '上海市近杨浦大桥浦西侧', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:15:00')),
-(28, 3, 31.3208, 121.4669, 6.6, 38.0, 154.6, 4.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:17:00')),
-(28, 3, 31.3108, 121.4725, 6.6, 38.0, 154.6, 4.5, '上海市近杨浦大桥浦西侧', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:19:00')),
-(28, 3, 31.3009, 121.4781, 6.6, 38.0, 154.3, 4.5, '上海市近杨浦大桥浦西侧', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:21:00')),
-(28, 3, 31.2911, 121.4836, 6.6, 38.0, 154.3, 4.5, '上海市近杨浦大桥浦西侧', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:23:00')),
-(28, 3, 31.2812, 121.4892, 6.6, 38.0, 154.3, 4.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:25:00')),
-(28, 3, 31.2710, 121.4940, 6.5, 38.0, 158.1, 4.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:27:00')),
-(28, 3, 31.2608, 121.4988, 6.5, 38.0, 158.1, 4.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:28:00')),
-(28, 3, 31.2550, 121.5050, 6.5, 0.0, 137.6, 5.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 28 DAY), '10:31:00')),
-(29, 2, 31.3988, 121.4312, 6.8, 0.0, 196.3, 5.5, '上海市宝山仓出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:00:00')),
-(29, 2, 31.3847, 121.4263, 6.8, 38.0, 196.3, 4.5, '上海市向南', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:05:00')),
-(29, 2, 31.3705, 121.4215, 6.7, 38.0, 196.3, 4.5, '上海市沪太路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:07:00')),
-(29, 2, 31.3557, 121.4161, 6.7, 38.0, 197.1, 4.5, '上海市中环西段', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:10:00')),
-(29, 2, 31.3408, 121.4108, 6.7, 38.0, 197.1, 4.5, '上海市继续南下', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:13:00')),
-(29, 2, 31.3258, 121.4050, 6.7, 38.0, 198.3, 4.5, '上海市外环高速', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:15:00')),
-(29, 2, 31.3108, 121.3992, 6.6, 38.0, 198.3, 4.5, '上海市长宁区', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:18:00')),
-(29, 2, 31.2958, 121.3944, 6.6, 38.0, 195.4, 4.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:21:00')),
-(29, 2, 31.2808, 121.3895, 6.6, 38.0, 195.4, 4.5, '上海市长宁区', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:24:00')),
-(29, 2, 31.2658, 121.3828, 6.5, 38.0, 200.8, 4.5, '上海市长宁区', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:27:00')),
-(29, 2, 31.2508, 121.3762, 6.5, 38.0, 200.8, 4.5, '上海市长宁区', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:29:00')),
-(29, 2, 31.2408, 121.3714, 6.5, 38.0, 202.3, 4.5, '上海市长宁区', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:31:00')),
-(29, 2, 31.2308, 121.3666, 6.5, 38.0, 202.3, 4.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:33:00')),
-(29, 2, 31.2208, 121.3618, 6.4, 38.0, 202.3, 4.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:35:00')),
-(29, 2, 31.2084, 121.3539, 6.4, 38.0, 208.6, 4.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:38:00')),
-(29, 2, 31.1960, 121.3460, 6.4, 0.0, 208.6, 5.5, '上海市虹桥（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 29 DAY), '13:42:00')),
-(30, 3, 31.3988, 121.4312, 6.8, 0.0, 159.6, 5.5, '上海市宝山仓出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 30 DAY), '17:00:00')),
-(30, 3, 31.3847, 121.4374, 6.8, 14.0, 159.6, 4.5, '上海市逸仙路南段', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 30 DAY), '17:14:00')),
-(30, 3, 31.3705, 121.4435, 6.7, 14.0, 159.6, 4.5, '上海市共和新路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 30 DAY), '17:21:00')),
-(30, 3, 31.3557, 121.4496, 6.7, 14.0, 160.5, 4.5, '上海市内环沪太', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 30 DAY), '17:29:00')),
-(30, 3, 31.3408, 121.4558, 6.7, 14.0, 160.5, 4.5, '上海市中山北路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 30 DAY), '17:36:00')),
-(30, 3, 31.3308, 121.4614, 6.7, 14.0, 154.6, 4.5, '上海市近杨浦大桥浦西侧', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 30 DAY), '17:41:00')),
-(30, 3, 31.3208, 121.4669, 6.6, 14.0, 154.6, 4.5, '上海市杨浦（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 30 DAY), '17:47:00')),
-(31, 1, 31.3988, 121.4312, 6.8, 0.0, 184.8, 5.5, '上海市宝山仓出发', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:30:00')),
-(31, 1, 31.3837, 121.4297, 6.8, 38.0, 184.8, 4.5, '上海市逸仙路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:35:00')),
-(31, 1, 31.3685, 121.4282, 6.7, 38.0, 184.8, 4.5, '上海市共和新路南段', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:38:00')),
-(31, 1, 31.3574, 121.4256, 6.7, 38.0, 191.2, 4.5, '上海市中山北路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:39:00')),
-(31, 1, 31.3463, 121.4231, 6.7, 38.0, 191.2, 4.5, '上海市内环高架', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:41:00')),
-(31, 1, 31.3352, 121.4205, 6.7, 38.0, 191.2, 4.5, '上海市中山西路', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:43:00')),
-(31, 1, 31.3243, 121.4198, 6.6, 38.0, 183.0, 4.5, '上海市近徐汇', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:45:00')),
-(31, 1, 31.3134, 121.4192, 6.6, 38.0, 183.0, 4.5, '上海市徐汇龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:47:00')),
-(31, 1, 31.3025, 121.4185, 6.6, 38.0, 183.0, 4.5, '上海市近徐汇', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:49:00')),
-(31, 1, 31.2912, 121.4202, 6.6, 38.0, 172.8, 4.5, '上海市近徐汇', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:51:00')),
-(31, 1, 31.2798, 121.4218, 6.6, 38.0, 172.8, 4.5, '上海市近徐汇', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:53:00')),
-(31, 1, 31.2685, 121.4235, 6.5, 38.0, 172.8, 4.5, '上海市近徐汇', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:55:00')),
-(31, 1, 31.2574, 121.4263, 6.5, 38.0, 168.0, 4.5, '上海市近徐汇', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:57:00')),
-(31, 1, 31.2463, 121.4290, 6.5, 38.0, 168.0, 4.5, '上海市近徐汇', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:59:00')),
-(31, 1, 31.2352, 121.4318, 6.5, 38.0, 168.0, 4.5, '上海市徐汇龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '10:01:00')),
-(31, 1, 31.2243, 121.4331, 6.4, 38.0, 174.0, 4.5, '上海市徐汇龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '10:03:00')),
-(31, 1, 31.2134, 121.4345, 6.4, 38.0, 174.0, 4.5, '上海市徐汇龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '10:05:00')),
-(31, 1, 31.2025, 121.4358, 6.4, 38.0, 174.0, 4.5, '上海市徐汇龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '10:07:00')),
-(31, 1, 31.1923, 121.4369, 6.4, 38.0, 174.8, 4.5, '上海市徐汇龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '10:09:00')),
-(31, 1, 31.1820, 121.4380, 6.4, 0.0, 174.8, 5.5, '上海市徐汇龙华路（到达）', TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '10:12:00'));
+-- ── 本次运输（当日实时轨迹，3条）──
+-- 第1点：从仓库出发（speed=0，准备发车）
+(1, 1, 31.1985, 121.5889, 6.0,  0.0, 340.0, 5.0,
+ '上海市浦东新区物流园区B区2号',
+ DATE_SUB(NOW(), INTERVAL 60 MINUTE)),
+-- 第2点：途经张杨路
+(1, 1, 31.2100, 121.5640, 6.2, 38.5, 332.0, 4.5,
+ '上海市浦东新区张杨路附近',
+ DATE_SUB(NOW(), INTERVAL 30 MINUTE)),
+-- 第3点：途经世纪大道（当前最新位置）
+(1, 1, 31.2256, 121.5350, 6.5, 42.0, 320.0, 4.0,
+ '上海市浦东新区世纪大道附近',
+ DATE_SUB(NOW(), INTERVAL 15 MINUTE)),
+-- ── 历史轨迹（过去30天内，覆盖不同小时，为 LLM 提供全天基础速度样本）──
+-- 早高峰（07-08时）参考轨迹：浦东南路附近，速度偏低
+(1, 1, 31.1950, 121.5150, 6.1, 12.0, 275.0, 5.0, '上海市浦东新区浦东南路',
+ TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL  3 DAY), '07:22:00')),
+(1, 1, 31.1960, 121.5080, 6.1,  8.5, 268.0, 5.0, '上海市浦东南路商城路附近',
+ TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL  5 DAY), '08:10:00')),
+(1, 1, 31.2002, 121.5100, 6.2, 14.0, 290.0, 4.5, '上海市延安路隧道出口',
+ TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL  7 DAY), '07:45:00')),
+-- 上午平峰（09-11时）：速度较高
+(1, 1, 31.2100, 121.5640, 6.2, 36.0, 332.0, 4.5, '上海市浦东新区张杨路',
+ TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL  2 DAY), '09:30:00')),
+(1, 1, 31.2256, 121.5350, 6.5, 40.0, 320.0, 4.0, '上海市浦东新区世纪大道',
+ TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL  4 DAY), '10:15:00')),
+(1, 1, 31.2300, 121.5200, 6.6, 38.0, 315.0, 4.0, '上海市浦东新区陆家嘴西路',
+ TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL  6 DAY), '11:00:00')),
+-- 午间（12-14时）：平均速度
+(1, 1, 31.2088, 121.4968, 6.4, 28.0, 310.0, 4.5, '上海市黄浦区西藏中路',
+ TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL  8 DAY), '12:30:00')),
+(1, 1, 31.2192, 121.4885, 6.5, 25.0, 305.0, 4.5, '上海市黄浦区人民广场',
+ TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 10 DAY), '13:20:00')),
+-- 下午平峰（15-16时）：速度较高
+(1, 1, 31.2356, 121.5050, 6.7, 42.0, 295.0, 4.0, '上海市浦东新区陆家嘴',
+ TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 12 DAY), '15:10:00')),
+(1, 1, 31.1985, 121.5889, 6.0, 39.0, 10.0,  4.0, '上海市浦东新区物流园区',
+ TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 14 DAY), '16:00:00')),
+-- 晚高峰（17-19时）：速度偏低
+(1, 1, 31.1932, 121.5150, 6.1, 10.0, 275.0, 5.0, '上海市浦东南路（晚高峰）',
+ TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL  1 DAY), '17:30:00')),
+(1, 1, 31.1960, 121.5280, 6.1,  6.5, 270.0, 5.5, '上海市延安路隧道浦东（拥堵）',
+ TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL  9 DAY), '18:05:00')),
+(1, 1, 31.2040, 121.4900, 6.3, 15.0, 285.0, 5.0, '上海市延安中路',
+ TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 11 DAY), '18:50:00')),
+-- 夜间（20-23时）：畅通
+(1, 1, 31.2195, 121.4540, 6.4, 44.0, 280.0, 4.0, '上海市曹杨路',
+ TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 15 DAY), '20:20:00')),
+(1, 1, 31.2358, 121.4200, 6.5, 46.0, 270.0, 4.0, '上海市普陀云岭东路',
+ TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 20 DAY), '22:10:00'));
 
--- ══════════════════════════════════════════════════════════
--- 数据统计
--- 新增轨迹点: 434 条（+ 已有 route_id=1 的 3 条 = 437 条总计）
--- 新增路线: 30 条（route_id 2-31）
--- 新增订单: 30 条（order_id 3-32）
--- 新增用户: 4 条（user_id 6-9）
--- ══════════════════════════════════════════════════════════
+-- ================================================================
+-- 调度池 dispatch_pool
+-- 商户备货完成后，订单进入此表等待智能调度系统统一处理
+-- status: 0=待调度 1=已调度（已分配批次）2=已取消
+-- ================================================================
+DROP TABLE IF EXISTS `dispatch_pool`;
+CREATE TABLE `dispatch_pool` (
+  `id`                    BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `order_id`              BIGINT       NOT NULL                COMMENT '订单ID',
+  `shop_id`               BIGINT       NOT NULL                COMMENT '商铺ID',
+  `warehouse_id`          BIGINT       NULL                    COMMENT '发货仓库ID（跨城到达Hub后为NULL）',
+  `end_address`           VARCHAR(500) NOT NULL                COMMENT '收货地址全文',
+  `end_lat`               DOUBLE       NULL                    COMMENT '收货地址纬度',
+  `end_lng`               DOUBLE       NULL                    COMMENT '收货地址经度',
+  `receiver_name`         VARCHAR(100) NOT NULL DEFAULT ''     COMMENT '收货人',
+  `receiver_phone`        VARCHAR(30)  NOT NULL DEFAULT ''     COMMENT '收货电话',
+  `remark`                VARCHAR(500) NULL                    COMMENT '订单备注（透传自订单，供急送检测）',
+  `status`                TINYINT      NOT NULL DEFAULT 0      COMMENT '0=待调度 1=已调度 2=已取消',
+  `batch_id`              BIGINT       NULL                    COMMENT '关联批次ID（调度后赋值）',
+  -- MCMF 全国调度扩展字段
+  `origin_hub_id`         BIGINT       NULL                    COMMENT '发货所在城市Hub ID',
+  `dest_hub_id`           BIGINT       NULL                    COMMENT '收货所在城市Hub ID',
+  `is_cross_city`         TINYINT      NOT NULL DEFAULT 0      COMMENT '是否跨城：0=同城 1=跨城',
+  `dispatch_origin_type`  TINYINT      NOT NULL DEFAULT 0      COMMENT '调度起点类型：0=仓库 1=干线到达Hub',
+  `dispatch_origin_lat`   DOUBLE       NULL                    COMMENT '实际调度起点纬度（type=1时为目标Hub坐标）',
+  `dispatch_origin_lng`   DOUBLE       NULL                    COMMENT '实际调度起点经度',
+  `dispatch_origin_addr`  VARCHAR(200) NULL                    COMMENT '实际调度起点地址',
+  `enter_time`            DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '入池时间',
+  `dispatch_time`         DATETIME     NULL                    COMMENT '调度执行时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_order_id` (`order_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_warehouse_id` (`warehouse_id`),
+  KEY `idx_dest_hub_id` (`dest_hub_id`),
+  KEY `idx_is_cross_city` (`is_cross_city`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单调度池';
+
+-- ============================================================
+-- 修改 logistics_route 表：新增 inter_city_batch_id 字段支持跨城干线虚拟路线
+-- segment_type 扩展：3=跨城干线（Hub→Hub，虚拟直线，不经GraphHopper）
+-- ============================================================
+ALTER TABLE `logistics_route`
+  ADD COLUMN `inter_city_batch_id` BIGINT DEFAULT NULL
+    COMMENT '关联跨城干线批次ID（segment_type=3时有值）'
+  AFTER `hub_id`,
+  ADD INDEX `idx_inter_city_batch_id` (`inter_city_batch_id`);
+
+-- ============================================================
+-- 全国物流网络表（MCMF 所需）
+-- ============================================================
+
+-- 全国多级中转站（国家枢纽/省级/城市配送中心）
+DROP TABLE IF EXISTS `national_hub`;
+CREATE TABLE `national_hub` (
+  `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '全国Hub ID',
+  `name`          VARCHAR(100) NOT NULL                COMMENT 'Hub名称',
+  `hub_level`     TINYINT      NOT NULL DEFAULT 2      COMMENT '层级：0=全国枢纽，1=省级中心，2=城市配送中心',
+  `province`      VARCHAR(50)  NOT NULL                COMMENT '所在省份',
+  `city`          VARCHAR(50)  NOT NULL                COMMENT '所在城市',
+  `latitude`      DOUBLE       NOT NULL                COMMENT '纬度',
+  `longitude`     DOUBLE       NOT NULL                COMMENT '经度',
+  `max_capacity`  INT          NOT NULL DEFAULT 5000   COMMENT '最大日处理量（件）',
+  `current_load`  INT          NOT NULL DEFAULT 0      COMMENT '当前待处理件数',
+  `status`        TINYINT      NOT NULL DEFAULT 0      COMMENT '状态：0=正常，1=满载，2=关闭',
+  `create_time`   DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  `update_time`   DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_hub_level` (`hub_level`),
+  INDEX `idx_city` (`city`),
+  INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='全国物流中转站（MCMF网络节点）';
+
+-- Hub间运输边（MCMF网络的边）
+DROP TABLE IF EXISTS `hub_link`;
+CREATE TABLE `hub_link` (
+  `id`                 BIGINT         NOT NULL AUTO_INCREMENT COMMENT '边ID',
+  `from_hub_id`        BIGINT         NOT NULL                COMMENT '起点Hub ID',
+  `to_hub_id`          BIGINT         NOT NULL                COMMENT '终点Hub ID',
+  `transport_mode`     VARCHAR(10)    NOT NULL DEFAULT 'ROAD' COMMENT '运输方式：ROAD/RAIL/AIR',
+  `capacity_daily`     INT            NOT NULL DEFAULT 500    COMMENT '日最大运量（件）',
+  `cost_per_unit`      DECIMAL(10,4)  NOT NULL DEFAULT 1.0000 COMMENT '今日有效费用（元/件，已含LLM校准倍率）',
+  `base_cost_per_unit` DECIMAL(10,4)  NOT NULL DEFAULT 1.0000 COMMENT '基准费用（静态录入值，LLM校准前）',
+  `distance_km`        DOUBLE         NOT NULL DEFAULT 0      COMMENT '里程（km）',
+  `duration_hours`     DOUBLE         NOT NULL DEFAULT 0      COMMENT '运输时长（h）',
+  `is_active`          TINYINT        NOT NULL DEFAULT 1      COMMENT '是否启用：0=停用，1=启用',
+  `create_time`        DATETIME       DEFAULT CURRENT_TIMESTAMP,
+  `update_time`        DATETIME       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_from_hub_id` (`from_hub_id`),
+  INDEX `idx_to_hub_id` (`to_hub_id`),
+  INDEX `idx_is_active` (`is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='全国Hub间运输边（MCMF网络边）';
+
+-- MCMF 流量规划单
+DROP TABLE IF EXISTS `flow_plan_item`;
+DROP TABLE IF EXISTS `flow_plan`;
+CREATE TABLE `flow_plan` (
+  `id`           BIGINT        NOT NULL AUTO_INCREMENT COMMENT '规划单ID',
+  `plan_date`    DATE          NOT NULL                COMMENT '规划日期',
+  `total_demand` INT           NOT NULL DEFAULT 0      COMMENT '总需运输件数',
+  `total_cost`   DECIMAL(12,2) NOT NULL DEFAULT 0      COMMENT 'MCMF最优总费用（元）',
+  `actual_flow`  INT           NOT NULL DEFAULT 0      COMMENT 'MCMF实际完成总流量（件，应等于总需运量则可行）',
+  `feasible`     TINYINT       NOT NULL DEFAULT 1      COMMENT '1=完全满足图上传输需求 0=部分枢纽不可达',
+  `status`       VARCHAR(20)   NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING/OPTIMIZING/DONE/FAILED',
+  `algorithm`    VARCHAR(50)   NOT NULL DEFAULT 'MCMF_SSP_SPFA' COMMENT '使用的算法',
+  `llm_advice`   TEXT          DEFAULT NULL            COMMENT 'LLM风险分析与调度建议',
+  `llm_enhanced` TINYINT       NOT NULL DEFAULT 0      COMMENT '是否使用LLM费用校准：0=否，1=是',
+  `create_time`  DATETIME      DEFAULT CURRENT_TIMESTAMP,
+  `update_time`  DATETIME      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_plan_date` (`plan_date`),
+  INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='MCMF流量规划单';
+
+-- MCMF 流量规划明细（每条边的分配流量）
+CREATE TABLE `flow_plan_item` (
+  `id`           BIGINT        NOT NULL AUTO_INCREMENT COMMENT '明细ID',
+  `plan_id`      BIGINT        NOT NULL                COMMENT '所属规划单ID',
+  `from_hub_id`  BIGINT        NOT NULL                COMMENT '起点Hub ID',
+  `to_hub_id`    BIGINT        NOT NULL                COMMENT '终点Hub ID',
+  `link_id`      BIGINT        NOT NULL                COMMENT '对应hub_link.id',
+  `flow_amount`  INT           NOT NULL DEFAULT 0      COMMENT '分配流量（件）',
+  `edge_cost`    DECIMAL(10,4) NOT NULL DEFAULT 0      COMMENT '该边单位费用',
+  `total_cost`   DECIMAL(12,2) NOT NULL DEFAULT 0      COMMENT '该边总费用（flow_amount * edge_cost）',
+  `create_time`  DATETIME      DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_plan_id` (`plan_id`),
+  INDEX `idx_from_to` (`from_hub_id`, `to_hub_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='MCMF流量规划明细';
+
+-- 跨城干线批次
+DROP TABLE IF EXISTS `inter_city_batch`;
+CREATE TABLE `inter_city_batch` (
+  `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '批次ID',
+  `batch_no`        VARCHAR(30)  NOT NULL UNIQUE        COMMENT '批次编号（IB+时间戳+4位随机）',
+  `flow_plan_id`    BIGINT       NOT NULL                COMMENT '所属流量规划单ID',
+  `from_hub_id`     BIGINT       NOT NULL                COMMENT '起点Hub ID',
+  `to_hub_id`       BIGINT       NOT NULL                COMMENT '终点Hub ID',
+  `transport_mode`  VARCHAR(10)  NOT NULL DEFAULT 'ROAD' COMMENT '运输方式：ROAD/RAIL/AIR',
+  `planned_depart`  DATETIME     NULL                    COMMENT '计划发车时间',
+  `actual_depart`   DATETIME     NULL                    COMMENT '实际发车时间',
+  `actual_arrive`   DATETIME     NULL                    COMMENT '实际到达时间',
+  `status`          VARCHAR(20)  NOT NULL DEFAULT 'CREATED' COMMENT '状态：CREATED/DEPARTED/ARRIVED/DISPATCHED',
+  `item_count`      INT          NOT NULL DEFAULT 0      COMMENT '包含订单件数',
+  `remark`          VARCHAR(300) NULL,
+  `create_time`     DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  `update_time`     DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_batch_no` (`batch_no`),
+  INDEX `idx_flow_plan_id` (`flow_plan_id`),
+  INDEX `idx_from_to` (`from_hub_id`, `to_hub_id`),
+  INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='跨城干线批次';
+
+-- ============================================================
+-- 全国Hub测试数据（与 TODO 附录示例一致）
+-- ============================================================
+INSERT INTO `national_hub` (`id`, `name`, `hub_level`, `province`, `city`, `latitude`, `longitude`, `max_capacity`, `current_load`, `status`) VALUES
+(1, '武汉全国枢纽',  0, '湖北', '武汉', 30.5928, 114.3055, 10000, 0, 0),
+(2, '郑州全国枢纽',  0, '河南', '郑州', 34.7466, 113.6253, 10000, 0, 0),
+(3, '上海配送中心',  2, '上海', '上海', 31.2304, 121.4737,  5000, 0, 0),
+(4, '北京配送中心',  2, '北京', '北京', 39.9042, 116.4074,  5000, 0, 0),
+(5, '广州配送中心',  2, '广东', '广州', 23.1291, 113.2644,  5000, 0, 0),
+(6, '成都配送中心',  2, '四川', '成都', 30.5723, 104.0665,  5000, 0, 0),
+(7, '西安配送中心',  2, '陕西', '西安', 34.3416, 108.9398,  5000, 0, 0),
+(8, '深圳配送中心',  2, '广东', '深圳', 22.5431, 114.0579,  5000, 0, 0),
+(9, '南京配送中心',  2, '江苏', '南京', 32.0603, 118.7969,  5000, 0, 0),
+-- 省级枢纽（hub_level=1）：衔接大区与全国枢纽，便于 MCMF 多路径分摊
+(10, '沈阳省级枢纽', 1, '辽宁', '沈阳', 41.8057, 123.4315,  8000, 0, 0),
+(11, '济南省级枢纽', 1, '山东', '济南', 36.6512, 117.1201,  8000, 0, 0),
+(12, '杭州省级枢纽', 1, '浙江', '杭州', 30.2741, 120.1551,  8000, 0, 0),
+(13, '重庆省级枢纽', 1, '重庆', '重庆', 29.5630, 106.5516,  8000, 0, 0),
+-- 配套城市配送中心（hub_level=2）
+(14, '大连配送中心', 2, '辽宁', '大连', 38.9140, 121.6147,  5000, 0, 0),
+(15, '青岛配送中心', 2, '山东', '青岛', 36.0671, 120.3826,  5000, 0, 0),
+(16, '宁波配送中心', 2, '浙江', '宁波', 29.8683, 121.5440,  5000, 0, 0),
+(17, '长沙配送中心', 2, '湖南', '长沙', 28.2282, 112.9388,  5000, 0, 0);
+
+-- Hub间运输边（id, from, to, mode, capacity, cost_per_unit, base_cost, dist_km, duration_h, is_active）
+INSERT INTO `hub_link` (`id`,`from_hub_id`,`to_hub_id`,`transport_mode`,`capacity_daily`,`cost_per_unit`,`base_cost_per_unit`,`distance_km`,`duration_hours`,`is_active`) VALUES
+( 1, 3, 1, 'ROAD', 500, 3.20, 3.20,  840, 10.0, 1), -- 上海→武汉
+( 2, 3, 9, 'ROAD', 500, 0.90, 0.90,  290,  4.0, 1), -- 上海→南京
+( 3, 3, 2, 'RAIL', 300, 2.80, 2.80,  800,  6.0, 1), -- 上海→郑州
+( 4, 4, 1, 'ROAD', 300, 3.80, 3.80, 1100, 13.0, 1), -- 北京→武汉
+( 5, 4, 2, 'RAIL', 400, 2.10, 2.10,  690,  6.0, 1), -- 北京→郑州
+( 6, 5, 1, 'ROAD', 400, 3.50, 3.50, 1000, 12.0, 1), -- 广州→武汉
+( 7, 5, 8, 'ROAD', 500, 0.60, 0.60,  140,  2.0, 1), -- 广州→深圳
+( 8, 1, 6, 'ROAD', 400, 2.60, 2.60,  800, 10.0, 1), -- 武汉→成都
+( 9, 1, 7, 'ROAD', 300, 2.40, 2.40,  680,  8.0, 1), -- 武汉→西安
+(10, 2, 7, 'RAIL', 300, 1.80, 1.80,  500,  5.0, 1), -- 郑州→西安
+(11, 2, 6, 'ROAD', 250, 2.20, 2.20, 1000, 12.0, 1), -- 郑州→成都
+(12, 2, 9, 'RAIL', 300, 2.00, 2.00,  700,  6.0, 1), -- 郑州→南京
+-- 以下入边补全：原先北京/上海/广州等仅有「发出」边，MCMF 无法把货流送进该城（沪→京、京→沪等 OD 在图上不可行，界面看不到京沪干线）
+(13, 9, 3, 'ROAD', 400, 1.00, 1.00,  290,  4.0, 1), -- 南京→上海（京→沪/经宁入沪）
+(14, 2, 4, 'RAIL', 350, 2.40, 2.40,  660,  7.0, 1), -- 郑州→北京（华北到达）
+(15, 1, 4, 'ROAD', 300, 2.90, 2.90, 1050, 12.0, 1), -- 武汉→北京
+(16, 2, 5, 'RAIL', 300, 2.70, 2.70, 1400, 12.0, 1), -- 郑州→广州（华南到达）
+(17, 3, 4, 'RAIL', 200, 4.20, 4.20, 1200, 14.0, 1), -- 上海→北京（京沪直达干线，便于演示）
+-- ── 省级枢纽 + 城市枢纽 衔接边（有向；对向成对给出，保证主要 OD 在图上可达）──
+-- 华北 / 东北
+(18, 4, 10, 'RAIL', 350, 3.10, 3.10,  700,  8.0, 1), -- 北京→沈阳
+(19, 10, 4, 'RAIL', 350, 3.10, 3.10,  700,  8.0, 1), -- 沈阳→北京
+(20, 10, 14, 'ROAD', 450, 0.48, 0.48,  380,  4.0, 1), -- 沈阳→大连
+(21, 14, 10, 'ROAD', 450, 0.48, 0.48,  380,  4.0, 1), -- 大连→沈阳
+(22, 14, 4, 'ROAD', 300, 2.95, 2.95,  800, 10.0, 1), -- 大连→北京（渤海湾经陆路示意）
+(23, 4, 14, 'ROAD', 300, 2.95, 2.95,  800, 10.0, 1), -- 北京→大连
+(24, 10, 11, 'RAIL', 280, 2.75, 2.75, 1050, 11.0, 1), -- 沈阳→济南（关内衔接）
+(25, 11, 10, 'RAIL', 280, 2.75, 2.75, 1050, 11.0, 1), -- 济南→沈阳
+-- 山东 / 中原
+(26, 2, 11, 'RAIL', 400, 1.35, 1.35,  420,  5.0, 1), -- 郑州→济南
+(27, 11, 2, 'RAIL', 400, 1.35, 1.35,  420,  5.0, 1), -- 济南→郑州
+(28, 11, 15, 'ROAD', 500, 0.88, 0.88,  350,  4.0, 1), -- 济南→青岛
+(29, 15, 11, 'ROAD', 500, 0.88, 0.88,  350,  4.0, 1), -- 青岛→济南
+(30, 11, 9, 'RAIL', 350, 1.75, 1.75,  620,  7.0, 1), -- 济南→南京
+(31, 9, 11, 'RAIL', 350, 1.75, 1.75,  620,  7.0, 1), -- 南京→济南
+(32, 15, 3, 'ROAD', 350, 2.15, 2.15,  650,  8.0, 1), -- 青岛→上海
+(33, 3, 15, 'ROAD', 350, 2.15, 2.15,  650,  8.0, 1), -- 上海→青岛
+-- 华东（沪杭甬、宁杭）
+(34, 3, 12, 'ROAD', 500, 0.52, 0.52,  180,  2.5, 1), -- 上海→杭州
+(35, 12, 3, 'ROAD', 500, 0.52, 0.52,  180,  2.5, 1), -- 杭州→上海
+(36, 12, 16, 'ROAD', 500, 0.58, 0.58,  155,  2.0, 1), -- 杭州→宁波
+(37, 16, 12, 'ROAD', 500, 0.58, 0.58,  155,  2.0, 1), -- 宁波→杭州
+(38, 3, 16, 'ROAD', 400, 0.62, 0.62,  215,  2.5, 1), -- 上海→宁波
+(39, 16, 3, 'ROAD', 400, 0.62, 0.62,  215,  2.5, 1), -- 宁波→上海
+(40, 12, 9, 'ROAD', 450, 1.05, 1.05,  230,  3.0, 1), -- 杭州→南京
+(41, 9, 12, 'ROAD', 450, 1.05, 1.05,  230,  3.0, 1), -- 南京→杭州
+(42, 12, 1, 'ROAD', 350, 2.45, 2.45,  750,  9.0, 1), -- 杭州→武汉
+(43, 1, 12, 'ROAD', 350, 2.45, 2.45,  750,  9.0, 1), -- 武汉→杭州
+(44, 12, 5, 'RAIL', 300, 3.15, 3.15, 1250, 12.0, 1), -- 杭州→广州
+(45, 5, 12, 'RAIL', 300, 3.15, 3.15, 1250, 12.0, 1), -- 广州→杭州
+-- 华中 / 华南（长沙衔接武汉、郑州、广州）
+(46, 1, 17, 'ROAD', 450, 0.82, 0.82,  340,  4.0, 1), -- 武汉→长沙
+(47, 17, 1, 'ROAD', 450, 0.82, 0.82,  340,  4.0, 1), -- 长沙→武汉
+(48, 17, 5, 'ROAD', 400, 2.25, 2.25,  720,  9.0, 1), -- 长沙→广州
+(49, 5, 17, 'ROAD', 400, 2.25, 2.25,  720,  9.0, 1), -- 广州→长沙
+(50, 17, 2, 'RAIL', 350, 1.90, 1.90,  810,  9.0, 1), -- 长沙→郑州
+(51, 2, 17, 'RAIL', 350, 1.90, 1.90,  810,  9.0, 1), -- 郑州→长沙
+-- 西南（渝蓉、渝陕、渝鄂）
+(52, 6, 13, 'ROAD', 500, 0.52, 0.52,  300,  4.0, 1), -- 成都→重庆
+(53, 13, 6, 'ROAD', 500, 0.52, 0.52,  300,  4.0, 1), -- 重庆→成都
+(54, 13, 7, 'ROAD', 350, 2.05, 2.05,  650,  8.0, 1), -- 重庆→西安
+(55, 7, 13, 'ROAD', 350, 2.05, 2.05,  650,  8.0, 1), -- 西安→重庆
+(56, 13, 1, 'ROAD', 350, 1.95, 1.95,  750,  9.0, 1), -- 重庆→武汉
+(57, 1, 13, 'ROAD', 350, 1.95, 1.95,  750,  9.0, 1), -- 武汉→重庆
+(58, 2, 13, 'RAIL', 300, 2.35, 2.35,  900, 10.0, 1), -- 郑州→重庆（西南陆路主轴）
+(59, 13, 2, 'RAIL', 300, 2.35, 2.35,  900, 10.0, 1); -- 重庆→郑州
+
+-- 上海的3个仓库归属上海配送中心（national_hub.id=3）
+UPDATE `warehouse` SET `affiliated_hub_id` = 3 WHERE `city` = '上海市' OR `province` = '上海市';
+
+-- ============================================================
+-- 仓储管理扩展：共享仓、库位、入库/出库/盘点/调拨单
+-- ============================================================
+
+-- warehouse_product 增加 shop_id 字段，支持共享仓多租户隔离
+-- 使用存储过程保证幂等（列不存在才执行 ALTER，避免重复运行报错）
+DROP PROCEDURE IF EXISTS `add_shop_id_to_warehouse_product`;
+DELIMITER $$
+CREATE PROCEDURE `add_shop_id_to_warehouse_product`()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME   = 'warehouse_product'
+          AND COLUMN_NAME  = 'shop_id'
+    ) THEN
+        ALTER TABLE `warehouse_product`
+            ADD COLUMN `shop_id` BIGINT DEFAULT NULL
+                COMMENT '所属商家ID（关联shop_info.id），共享仓下区分不同商家库存'
+                AFTER `product_id`,
+            ADD INDEX `idx_wp_shop_id` (`shop_id`);
+    END IF;
+END$$
+DELIMITER ;
+CALL `add_shop_id_to_warehouse_product`();
+DROP PROCEDURE IF EXISTS `add_shop_id_to_warehouse_product`;
+
+-- 补填现有数据的 shop_id（根据 product_info.shop_id 回填）
+UPDATE `warehouse_product` wp
+    JOIN `product_info` pi ON wp.product_id = pi.id
+SET wp.shop_id = pi.shop_id
+WHERE wp.shop_id IS NULL;
+
+-- ============================================================
+-- 1. 仓库-商家关联表（多对多共享仓）
+-- ============================================================
+DROP TABLE IF EXISTS `warehouse_shop`;
+CREATE TABLE `warehouse_shop` (
+  `id`           BIGINT   NOT NULL AUTO_INCREMENT COMMENT '关联ID',
+  `warehouse_id` BIGINT   NOT NULL COMMENT '仓库ID（关联warehouse.id）',
+  `shop_id`      BIGINT   NOT NULL COMMENT '商家ID（关联shop_info.id）',
+  `role`         VARCHAR(20) NOT NULL DEFAULT 'TENANT' COMMENT '角色：OWNER=仓库所有者，TENANT=租用方',
+  `status`       TINYINT  NOT NULL DEFAULT 1 COMMENT '状态：0=停用，1=启用',
+  `create_time`  DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `update_time`  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_warehouse_shop` (`warehouse_id`, `shop_id`),
+  INDEX `idx_warehouse_id` (`warehouse_id`),
+  INDEX `idx_shop_id` (`shop_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='仓库-商家关联表（支持共享仓，多对多）';
+
+-- 初始数据：根据现有库存关系，建立商家-仓库归属
+-- 使用 INSERT IGNORE 保证幂等（重复执行时跳过已存在记录）
+INSERT IGNORE INTO `warehouse_shop` (`warehouse_id`, `shop_id`, `role`) VALUES
+(1, 1, 'OWNER'),   -- 上海闵行分拨仓 → 优质食品店（owner）
+(2, 1, 'OWNER'),   -- 上海华东仓库 → 优质食品店（owner）
+(2, 2, 'TENANT'),  -- 上海华东仓库 → 时尚服装店（共享租用）
+(3, 1, 'TENANT'),  -- 上海宝山分拨仓 → 优质食品店（共享租用）
+(3, 2, 'TENANT'),  -- 上海宝山分拨仓 → 时尚服装店（共享租用）
+(4, 3, 'OWNER');   -- 北京大兴履约中心 → 京北优品铺（owner）
+
+-- ============================================================
+-- 2. 库位表
+-- ============================================================
+DROP TABLE IF EXISTS `warehouse_location`;
+CREATE TABLE `warehouse_location` (
+  `id`            BIGINT      NOT NULL AUTO_INCREMENT COMMENT '库位ID',
+  `warehouse_id`  BIGINT      NOT NULL COMMENT '所属仓库ID',
+  `zone_code`     VARCHAR(20) NOT NULL COMMENT '区域编码（如 A、B、冷链区）',
+  `row_no`        VARCHAR(10) NOT NULL COMMENT '排号',
+  `shelf_no`      VARCHAR(10) NOT NULL COMMENT '架号',
+  `level_no`      VARCHAR(10) NOT NULL COMMENT '层号',
+  `location_code` VARCHAR(50) NOT NULL COMMENT '库位编码（唯一，如 A-01-02-03）',
+  `capacity`      INT         NOT NULL DEFAULT 100 COMMENT '容量（件）',
+  `current_stock` INT         NOT NULL DEFAULT 0   COMMENT '当前占用量',
+  `status`        TINYINT     NOT NULL DEFAULT 1    COMMENT '状态：0=禁用，1=正常，2=锁定（盘点中）',
+  `create_time`   DATETIME    DEFAULT CURRENT_TIMESTAMP,
+  `update_time`   DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_location_code` (`warehouse_id`, `location_code`),
+  INDEX `idx_warehouse_id` (`warehouse_id`),
+  INDEX `idx_zone_code` (`warehouse_id`, `zone_code`),
+  INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='库位表';
+
+-- 初始库位数据（每个仓库生成少量示例库位）
+INSERT INTO `warehouse_location` (`warehouse_id`, `zone_code`, `row_no`, `shelf_no`, `level_no`, `location_code`, `capacity`, `current_stock`, `status`) VALUES
+-- 仓库1（上海闵行分拨仓）
+(1, 'A', '01', '01', '01', 'A-01-01-01', 100, 50,  1),
+(1, 'A', '01', '01', '02', 'A-01-01-02', 100, 100, 1),
+(1, 'A', '01', '02', '01', 'A-01-02-01', 100, 0,   1),
+(1, 'B', '01', '01', '01', 'B-01-01-01', 200, 0,   1),
+-- 仓库2（上海华东仓库）
+(2, 'A', '01', '01', '01', 'A-01-01-01', 100, 49,  1),
+(2, 'A', '01', '01', '02', 'A-01-01-02', 100, 99,  1),
+(2, 'A', '01', '02', '01', 'A-01-02-01', 100, 30,  1),
+(2, 'A', '01', '02', '02', 'A-01-02-02', 100, 20,  1),
+(2, 'B', '01', '01', '01', 'B-01-01-01', 200, 0,   1),
+(2, 'B', '01', '01', '02', 'B-01-01-02', 200, 0,   1),
+-- 仓库3（上海宝山分拨仓）
+(3, 'A', '01', '01', '01', 'A-01-01-01', 100, 100, 1),
+(3, 'A', '01', '01', '02', 'A-01-01-02', 100, 10,  1),
+(3, 'B', '01', '01', '01', 'B-01-01-01', 200, 0,   1),
+-- 仓库4（北京大兴履约中心）
+(4, 'A', '01', '01', '01', 'A-01-01-01', 500, 800,  1),
+(4, 'A', '01', '01', '02', 'A-01-01-02', 500, 1200, 1),
+(4, 'B', '01', '01', '01', 'B-01-01-01', 300, 0,    1);
+
+-- ============================================================
+-- 3. 入库单
+-- ============================================================
+DROP TABLE IF EXISTS `inbound_order_item`;
+DROP TABLE IF EXISTS `inbound_order`;
+CREATE TABLE `inbound_order` (
+  `id`            BIGINT      NOT NULL AUTO_INCREMENT COMMENT '入库单ID',
+  `order_no`      VARCHAR(30) NOT NULL UNIQUE COMMENT '入库单号（IB+时间戳+4位随机）',
+  `warehouse_id`  BIGINT      NOT NULL COMMENT '目标仓库ID',
+  `shop_id`       BIGINT      NOT NULL COMMENT '所属商家ID',
+  `source_type`   VARCHAR(20) NOT NULL DEFAULT 'PURCHASE' COMMENT '来源类型：PURCHASE=采购，TRANSFER=调拨，RETURN=退货',
+  `related_id`    BIGINT      DEFAULT NULL COMMENT '关联单据ID（调拨单/退货单）',
+  `operator_id`   BIGINT      DEFAULT NULL COMMENT '操作人ID',
+  `status`        VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING=待入库，PROCESSING=入库中，DONE=已完成，CANCELLED=已取消',
+  `expected_time` DATETIME    DEFAULT NULL COMMENT '预计入库时间',
+  `actual_time`   DATETIME    DEFAULT NULL COMMENT '实际完成时间',
+  `remark`        VARCHAR(500) DEFAULT NULL COMMENT '备注',
+  `create_time`   DATETIME    DEFAULT CURRENT_TIMESTAMP,
+  `update_time`   DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_order_no` (`order_no`),
+  INDEX `idx_warehouse_id` (`warehouse_id`),
+  INDEX `idx_shop_id` (`shop_id`),
+  INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='入库单';
+
+CREATE TABLE `inbound_order_item` (
+  `id`               BIGINT      NOT NULL AUTO_INCREMENT COMMENT '明细ID',
+  `inbound_order_id` BIGINT      NOT NULL COMMENT '所属入库单ID',
+  `product_id`       BIGINT      NOT NULL COMMENT '商品ID',
+  `product_name`     VARCHAR(200) NOT NULL COMMENT '商品名称（快照）',
+  `expected_qty`     INT         NOT NULL DEFAULT 0 COMMENT '预计数量',
+  `actual_qty`       INT         NOT NULL DEFAULT 0 COMMENT '实际入库数量',
+  `location_id`      BIGINT      DEFAULT NULL COMMENT '上架库位ID',
+  `status`           VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING=待入库，DONE=已入库',
+  `create_time`      DATETIME    DEFAULT CURRENT_TIMESTAMP,
+  `update_time`      DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_inbound_order_id` (`inbound_order_id`),
+  INDEX `idx_product_id` (`product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='入库单明细';
+
+-- ============================================================
+-- 4. 出库单
+-- ============================================================
+DROP TABLE IF EXISTS `outbound_order_item`;
+DROP TABLE IF EXISTS `outbound_order`;
+CREATE TABLE `outbound_order` (
+  `id`            BIGINT      NOT NULL AUTO_INCREMENT COMMENT '出库单ID',
+  `order_no`      VARCHAR(30) NOT NULL UNIQUE COMMENT '出库单号（OB+时间戳+4位随机）',
+  `warehouse_id`  BIGINT      NOT NULL COMMENT '出库仓库ID',
+  `shop_id`       BIGINT      NOT NULL COMMENT '所属商家ID',
+  `dest_type`     VARCHAR(20) NOT NULL DEFAULT 'DELIVERY' COMMENT '目的类型：DELIVERY=配送出库，TRANSFER=调拨，RETURN=退货',
+  `related_id`    BIGINT      DEFAULT NULL COMMENT '关联单据ID（订单/调拨单）',
+  `operator_id`   BIGINT      DEFAULT NULL COMMENT '操作人ID',
+  `status`        VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING=待出库，PROCESSING=出库中，DONE=已完成，CANCELLED=已取消',
+  `expected_time` DATETIME    DEFAULT NULL COMMENT '预计出库时间',
+  `actual_time`   DATETIME    DEFAULT NULL COMMENT '实际完成时间',
+  `remark`        VARCHAR(500) DEFAULT NULL COMMENT '备注',
+  `create_time`   DATETIME    DEFAULT CURRENT_TIMESTAMP,
+  `update_time`   DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_order_no` (`order_no`),
+  INDEX `idx_warehouse_id` (`warehouse_id`),
+  INDEX `idx_shop_id` (`shop_id`),
+  INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='出库单';
+
+CREATE TABLE `outbound_order_item` (
+  `id`                BIGINT      NOT NULL AUTO_INCREMENT COMMENT '明细ID',
+  `outbound_order_id` BIGINT      NOT NULL COMMENT '所属出库单ID',
+  `product_id`        BIGINT      NOT NULL COMMENT '商品ID',
+  `product_name`      VARCHAR(200) NOT NULL COMMENT '商品名称（快照）',
+  `quantity`          INT         NOT NULL DEFAULT 0 COMMENT '出库数量',
+  `location_id`       BIGINT      DEFAULT NULL COMMENT '拣货库位ID',
+  `status`            VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING=待拣货，DONE=已出库',
+  `create_time`       DATETIME    DEFAULT CURRENT_TIMESTAMP,
+  `update_time`       DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_outbound_order_id` (`outbound_order_id`),
+  INDEX `idx_product_id` (`product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='出库单明细';
+
+-- ============================================================
+-- 5. 盘点单
+-- ============================================================
+DROP TABLE IF EXISTS `inventory_check_item`;
+DROP TABLE IF EXISTS `inventory_check`;
+CREATE TABLE `inventory_check` (
+  `id`           BIGINT      NOT NULL AUTO_INCREMENT COMMENT '盘点单ID',
+  `check_no`     VARCHAR(30) NOT NULL UNIQUE COMMENT '盘点单号（CC+时间戳+4位随机）',
+  `warehouse_id` BIGINT      NOT NULL COMMENT '盘点仓库ID',
+  `shop_id`      BIGINT      DEFAULT NULL COMMENT '商家ID（NULL=全仓盘点，指定则按商家范围盘）',
+  `check_type`   VARCHAR(20) NOT NULL DEFAULT 'FULL' COMMENT '盘点类型：FULL=全盘，ZONE=分区盘，DYNAMIC=动态盘',
+  `zone_code`    VARCHAR(20) DEFAULT NULL COMMENT '盘点区域（分区盘时有效）',
+  `operator_id`  BIGINT      DEFAULT NULL COMMENT '操作人ID',
+  `status`       VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING=待盘点，PROCESSING=盘点中，CONFIRMING=待确认，DONE=已完成',
+  `start_time`   DATETIME    DEFAULT NULL COMMENT '开始时间',
+  `end_time`     DATETIME    DEFAULT NULL COMMENT '完成时间',
+  `remark`       VARCHAR(500) DEFAULT NULL COMMENT '备注',
+  `create_time`  DATETIME    DEFAULT CURRENT_TIMESTAMP,
+  `update_time`  DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_check_no` (`check_no`),
+  INDEX `idx_warehouse_id` (`warehouse_id`),
+  INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='盘点单';
+
+CREATE TABLE `inventory_check_item` (
+  `id`           BIGINT NOT NULL AUTO_INCREMENT COMMENT '明细ID',
+  `check_id`     BIGINT NOT NULL COMMENT '所属盘点单ID',
+  `location_id`  BIGINT NOT NULL COMMENT '库位ID',
+  `product_id`   BIGINT NOT NULL COMMENT '商品ID',
+  `shop_id`      BIGINT DEFAULT NULL COMMENT '商家ID',
+  `product_name` VARCHAR(200) NOT NULL COMMENT '商品名称（快照）',
+  `system_qty`   INT    NOT NULL DEFAULT 0 COMMENT '系统账面数量',
+  `actual_qty`   INT    DEFAULT NULL COMMENT '实盘数量（NULL=尚未盘点）',
+  `difference`   INT    GENERATED ALWAYS AS (IFNULL(`actual_qty`, 0) - `system_qty`) STORED COMMENT '差异（实盘-系统）',
+  `status`       VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING=待盘，COUNTED=已盘，DIFF=有差异',
+  `create_time`  DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `update_time`  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_check_id` (`check_id`),
+  INDEX `idx_location_id` (`location_id`),
+  INDEX `idx_product_id` (`product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='盘点单明细';
+
+-- ============================================================
+-- 6. 调拨单
+-- ============================================================
+DROP TABLE IF EXISTS `transfer_order_item`;
+DROP TABLE IF EXISTS `transfer_order`;
+CREATE TABLE `transfer_order` (
+  `id`                 BIGINT      NOT NULL AUTO_INCREMENT COMMENT '调拨单ID',
+  `order_no`           VARCHAR(30) NOT NULL UNIQUE COMMENT '调拨单号（TR+时间戳+4位随机）',
+  `shop_id`            BIGINT      NOT NULL COMMENT '发起商家ID',
+  `src_warehouse_id`   BIGINT      NOT NULL COMMENT '调出仓库ID',
+  `dst_warehouse_id`   BIGINT      NOT NULL COMMENT '调入仓库ID',
+  `operator_id`        BIGINT      DEFAULT NULL COMMENT '操作人ID',
+  `status`             VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING=待审批，APPROVED=已审批，IN_TRANSIT=在途，DONE=已完成，CANCELLED=已取消',
+  `expected_time`      DATETIME    DEFAULT NULL COMMENT '预计完成时间',
+  `actual_time`        DATETIME    DEFAULT NULL COMMENT '实际完成时间',
+  `remark`             VARCHAR(500) DEFAULT NULL COMMENT '备注',
+  `create_time`        DATETIME    DEFAULT CURRENT_TIMESTAMP,
+  `update_time`        DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_order_no` (`order_no`),
+  INDEX `idx_shop_id` (`shop_id`),
+  INDEX `idx_src_warehouse_id` (`src_warehouse_id`),
+  INDEX `idx_dst_warehouse_id` (`dst_warehouse_id`),
+  INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='调拨单';
+
+CREATE TABLE `transfer_order_item` (
+  `id`                BIGINT NOT NULL AUTO_INCREMENT COMMENT '明细ID',
+  `transfer_order_id` BIGINT NOT NULL COMMENT '所属调拨单ID',
+  `product_id`        BIGINT NOT NULL COMMENT '商品ID',
+  `product_name`      VARCHAR(200) NOT NULL COMMENT '商品名称（快照）',
+  `quantity`          INT    NOT NULL DEFAULT 0 COMMENT '调拨数量',
+  `src_location_id`   BIGINT DEFAULT NULL COMMENT '调出库位ID',
+  `dst_location_id`   BIGINT DEFAULT NULL COMMENT '调入库位ID',
+  `status`            VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING=待出库，OUT=已出库，DONE=已入库',
+  `create_time`       DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `update_time`       DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_transfer_order_id` (`transfer_order_id`),
+  INDEX `idx_product_id` (`product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='调拨单明细';
+
+-- ============================================================
+-- 7. Hub 作业记录表（logistics-service 使用）
+-- ============================================================
+DROP TABLE IF EXISTS `hub_sorting_record`;
+DROP TABLE IF EXISTS `hub_inbound_record`;
+DROP TABLE IF EXISTS `hub_outbound_record`;
+
+CREATE TABLE `hub_inbound_record` (
+  `id`           BIGINT      NOT NULL AUTO_INCREMENT COMMENT '记录ID',
+  `hub_id`       BIGINT      NOT NULL COMMENT '配送中心ID（关联national_hub.id）',
+  `order_id`     BIGINT      DEFAULT NULL COMMENT '订单ID（手动登记时可为空）',
+  `waybill_no`   VARCHAR(50) DEFAULT NULL COMMENT '运单号',
+  `source_type`  VARCHAR(20) NOT NULL DEFAULT 'COLLECTION' COMMENT '来源：COLLECTION=揽收，TRUNK_ARRIVE=干线到达',
+  `from_hub_id`  BIGINT      DEFAULT NULL COMMENT '来源Hub ID（干线到达时有效）',
+  `operator_id`  BIGINT      DEFAULT NULL COMMENT '操作人ID',
+  `status`       VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING=待入库，DONE=已入库',
+  `arrive_time`  DATETIME    DEFAULT NULL COMMENT '到达时间',
+  `inbound_time` DATETIME    DEFAULT NULL COMMENT '入库确认时间',
+  `create_time`  DATETIME    DEFAULT CURRENT_TIMESTAMP,
+  `update_time`  DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_hub_id` (`hub_id`),
+  INDEX `idx_order_id` (`order_id`),
+  INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Hub到货入库记录';
+
+CREATE TABLE `hub_outbound_record` (
+  `id`            BIGINT      NOT NULL AUTO_INCREMENT COMMENT '记录ID',
+  `hub_id`        BIGINT      NOT NULL COMMENT '配送中心ID',
+  `order_id`      BIGINT      DEFAULT NULL COMMENT '订单ID（手动登记时可为空）',
+  `waybill_no`    VARCHAR(50) DEFAULT NULL COMMENT '运单号',
+  `dest_type`     VARCHAR(20) NOT NULL DEFAULT 'TRUNK' COMMENT '目的类型：TRUNK=干线发车，LAST_MILE=末端下发',
+  `dest_hub_id`   BIGINT      DEFAULT NULL COMMENT '目的Hub ID（干线时有效）',
+  `batch_id`      BIGINT      DEFAULT NULL COMMENT '批次ID（inter_city_batch 或 logistics_batch）',
+  `operator_id`   BIGINT      DEFAULT NULL COMMENT '操作人ID',
+  `status`        VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING=待出库，DONE=已出库',
+  `outbound_time` DATETIME    DEFAULT NULL COMMENT '出库时间',
+  `create_time`   DATETIME    DEFAULT CURRENT_TIMESTAMP,
+  `update_time`   DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_hub_id` (`hub_id`),
+  INDEX `idx_order_id` (`order_id`),
+  INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Hub出库记录';
+
+CREATE TABLE `hub_sorting_record` (
+  `id`               BIGINT      NOT NULL AUTO_INCREMENT COMMENT '记录ID',
+  `hub_id`           BIGINT      NOT NULL COMMENT '配送中心ID',
+  `order_id`         BIGINT      DEFAULT NULL COMMENT '订单ID（手动登记时可为空）',
+  `waybill_no`       VARCHAR(50) DEFAULT NULL COMMENT '运单号',
+  `dest_hub_id`      BIGINT      DEFAULT NULL COMMENT '目的配送中心ID',
+  `assigned_batch_id` BIGINT     DEFAULT NULL COMMENT '分配到的干线批次ID',
+  `sort_result`      VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT '分拣结果：PENDING=待分拣，ASSIGNED=已分配批次，DIRECT=直送末端',
+  `operator_id`      BIGINT      DEFAULT NULL COMMENT '操作人ID',
+  `sort_time`        DATETIME    DEFAULT NULL COMMENT '分拣时间',
+  `create_time`      DATETIME    DEFAULT CURRENT_TIMESTAMP,
+  `update_time`      DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_hub_id` (`hub_id`),
+  INDEX `idx_order_id` (`order_id`),
+  INDEX `idx_dest_hub_id` (`dest_hub_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Hub分拣记录';

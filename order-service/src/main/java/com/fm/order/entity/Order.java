@@ -48,9 +48,27 @@ public class Order {
 
     private String remark;          // 订单备注
 
-    private Long warehouseId;       // 发货仓库ID（下单时扣减库存的仓库，用于物流路线起点）
+    private Long warehouseId;       // 发货仓库ID（商户选择的发货仓库，物流路线起点）
+
+    private Long originHubId;       // 发货城市Hub ID（发货时分配）
+
+    private Long destHubId;         // 收货城市Hub ID（发货时分配）
+
+    private Long flowPlanId;        // MCMF 流量规划单ID（跨城时写入）
+
+    private Long interCityBatchId;  // 跨城干线批次ID（跨城时写入）
 
     private Integer customerDeleted; // 顾客软删除：0=正常，1=已隐藏
+
+    // ── 个人寄件扩展字段 ──────────────────────────────────────────
+
+    private Integer orderType;       // 订单类型：0=商户发货订单（默认），1=个人寄件
+
+    private String senderAddress;    // 取件地址文本快照（个人寄件用）
+
+    private Double senderLatitude;   // 取件地址纬度
+
+    private Double senderLongitude;  // 取件地址经度
 
     private Date createTime;        // 创建时间
 

@@ -38,6 +38,7 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
     // 白名单：不需要验证Token的路径
     private static final List<String> WHITE_LIST = Arrays.asList(
             "/api/auth/login",      // 登录接口
+            "/api/auth/register",   // 注册接口
             "/swagger-ui/**",       // Swagger文档
             "/v3/api-docs/**"       // Swagger API文档
     );

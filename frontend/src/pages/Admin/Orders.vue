@@ -7,12 +7,12 @@
                 <!-- 搜索模式切换 -->
                 <el-select v-model="searchMode" class="mode-select" @change="handleModeChange">
                     <el-option label="按订单号" value="orderNo" />
-                    <el-option label="按商户ID" value="shopId" />
+                    <el-option label="按商户编号" value="shopId" />
                 </el-select>
 
                 <el-input
                     v-model="searchInput"
-                    :placeholder="searchMode === 'orderNo' ? '输入订单号' : '输入商户 ID'"
+                    :placeholder="searchMode === 'orderNo' ? '输入订单号' : '输入商户编号'"
                     clearable
                     class="search-input"
                     @keyup.enter="handleSearch"
@@ -33,8 +33,8 @@
         <el-card shadow="never" class="table-card">
             <el-table :data="orders" v-loading="loading" stripe>
                 <el-table-column label="订单号" prop="orderNo" min-width="190" show-overflow-tooltip />
-                <el-table-column label="顾客ID" prop="customerId" width="90" align="center" />
-                <el-table-column label="商户ID" prop="shopId" width="90" align="center" />
+                <el-table-column label="顾客编号" prop="customerId" width="90" align="center" />
+                <el-table-column label="商户编号" prop="shopId" width="90" align="center" />
                 <el-table-column label="商品金额" width="110">
                     <template #default="{ row }">
                         <span class="price-text">¥{{ row.productAmount }}</span>
@@ -90,8 +90,8 @@
             <div v-if="detailData" class="detail-body">
                 <el-descriptions title="基本信息" :column="2" border size="small">
                     <el-descriptions-item label="订单号" :span="2">{{ detailData.order.orderNo }}</el-descriptions-item>
-                    <el-descriptions-item label="顾客ID">{{ detailData.order.customerId }}</el-descriptions-item>
-                    <el-descriptions-item label="商户ID">{{ detailData.order.shopId }}</el-descriptions-item>
+                    <el-descriptions-item label="顾客编号">{{ detailData.order.customerId }}</el-descriptions-item>
+                    <el-descriptions-item label="商户编号">{{ detailData.order.shopId }}</el-descriptions-item>
                     <el-descriptions-item label="商品金额">¥{{ detailData.order.productAmount }}</el-descriptions-item>
                     <el-descriptions-item label="运费">¥{{ detailData.order.shippingFee ?? '0.00' }}</el-descriptions-item>
                     <el-descriptions-item label="总金额">¥{{ detailData.order.totalAmount }}</el-descriptions-item>
@@ -120,6 +120,22 @@
                         </el-table-column>
                     </el-table>
                 </div>
+
+                <!-- 物流全程追踪（发货后显示） -->
+                <div
+                    v-if="detailData.order.orderStatus >= 2 && detailData.order.orderStatus !== 5"
+                    class="items-section"
+                >
+                    <div class="section-title">物流全程追踪</div>
+                    <div v-if="adminRouteLoading" style="text-align:center;padding:12px">
+                        <el-icon class="is-loading"><Loading /></el-icon> 路线加载中…
+                    </div>
+                    <LogisticsJourney
+                        v-else
+                        :segments="adminJourney"
+                        :receiver-address="detailData.order?.receiverAddress"
+                    />
+                </div>
             </div>
             <template #footer>
                 <el-button @click="detailVisible = false">关闭</el-button>
@@ -131,8 +147,10 @@
 
 <script setup lang="ts" name="AdminOrders">
     import { ref, onMounted } from 'vue';
-    import { Search, Refresh } from '@element-plus/icons-vue';
+    import { Search, Refresh, Loading } from '@element-plus/icons-vue';
     import { getAllOrders, getShopOrders, getOrderByNo, getOrderDetail } from '@/api/order';
+    import { getOrderJourney } from '@/api/logistics';
+    import LogisticsJourney from '@/components/LogisticsJourney.vue';
 
     const ORDER_STATUSES = [
         { value: 0, label: '待支付' },
@@ -254,14 +272,29 @@
 
     const detailVisible = ref(false);
     const detailData = ref<any>(null);
+    const adminJourney = ref<any[]>([]);
+    const adminRouteLoading = ref(false);
 
     const openDetail = async (row: any) => {
         detailVisible.value = true;
         detailData.value = null;
+        adminJourney.value = [];
         try {
             const res = await getOrderDetail(row.id);
             detailData.value = res.data;
+            if (res.data?.order?.orderStatus >= 2 && res.data?.order?.orderStatus !== 5) {
+                loadAdminJourney(row.id);
+            }
         } catch { detailVisible.value = false; }
+    };
+
+    const loadAdminJourney = async (orderId: number) => {
+        adminRouteLoading.value = true;
+        try {
+            const res = await getOrderJourney(orderId);
+            adminJourney.value = res.data ?? [];
+        } catch { adminJourney.value = []; }
+        finally { adminRouteLoading.value = false; }
     };
 
     // ==================== 工具函数 ====================

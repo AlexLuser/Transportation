@@ -10,6 +10,11 @@ import com.fm.customer.entity.Address;
 import com.fm.customer.mapper.AddressMapper;
 import com.fm.customer.service.AddressService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,23 +32,29 @@ public class AddressServiceImpl implements AddressService {
 
     @Autowired
     private AmapGeocodingService amapGeocodingService;
+
+    @Autowired
+    private CacheManager cacheManager;
     
     @Override
+    @Cacheable(value = "addressList", key = "#customerId")
     public List<Address> getAddressesByCustomerId(Long customerId) {
         LambdaQueryWrapper<Address> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Address::getCustomerId, customerId)
-                .orderByDesc(Address::getIsDefault)  // 默认地址排在前面
-                .orderByDesc(Address::getCreateTime);  // 按创建时间倒序
+                .orderByDesc(Address::getIsDefault)
+                .orderByDesc(Address::getCreateTime);
         return addressMapper.selectList(wrapper);
     }
-    
+
     @Override
+    @Cacheable(value = "addressById", key = "#addressId", unless = "#result == null")
     public Address getAddressById(Long addressId) {
         return addressMapper.selectById(addressId);
     }
-    
+
     @Override
     @Transactional
+    @CacheEvict(value = "addressList", key = "#address.customerId", condition = "#address.customerId != null")
     public Address addAddress(Address address) {
         // 如果是第一条地址，自动设为默认
         List<Address> existingAddresses = getAddressesByCustomerId(address.getCustomerId());
@@ -66,6 +77,10 @@ public class AddressServiceImpl implements AddressService {
     
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "addressById",  key = "#address.id",         condition = "#address.id != null"),
+        @CacheEvict(value = "addressList",  key = "#address.customerId", condition = "#address.customerId != null")
+    })
     public Address updateAddress(Address address) {
         // 获取更新前的地址信息
         Address existingAddress = getAddressById(address.getId());
@@ -91,21 +106,30 @@ public class AddressServiceImpl implements AddressService {
     @Override
     @Transactional
     public boolean deleteAddress(Long addressId) {
-        Address address = getAddressById(addressId);
+        Address address = addressMapper.selectById(addressId);
         if (address == null) {
             return false;
         }
 
         boolean deleted = addressMapper.deleteById(addressId) > 0;
 
-        // 被删除的是默认地址时，从剩余地址中自动选一个设为默认
-        if (deleted && address.getIsDefault() != null && address.getIsDefault() == 1) {
-            List<Address> remaining = getAddressesByCustomerId(address.getCustomerId());
-            if (!remaining.isEmpty()) {
-                LambdaUpdateWrapper<Address> setWrapper = new LambdaUpdateWrapper<>();
-                setWrapper.eq(Address::getId, remaining.get(0).getId())
-                        .set(Address::getIsDefault, 1);
-                addressMapper.update(null, setWrapper);
+        if (deleted) {
+            // 手动清除缓存（避免 Spring AOP 无法代理同类内部调用的问题）
+            Cache byId = cacheManager.getCache("addressById");
+            if (byId != null) byId.evict(addressId);
+            Cache list = cacheManager.getCache("addressList");
+            if (list != null) list.evict(address.getCustomerId());
+
+            // 被删除的是默认地址时，从剩余地址中自动选一个设为默认
+            if (address.getIsDefault() != null && address.getIsDefault() == 1) {
+                List<Address> remaining = addressMapper.selectList(
+                    new LambdaQueryWrapper<Address>().eq(Address::getCustomerId, address.getCustomerId()));
+                if (!remaining.isEmpty()) {
+                    LambdaUpdateWrapper<Address> setWrapper = new LambdaUpdateWrapper<>();
+                    setWrapper.eq(Address::getId, remaining.get(0).getId())
+                            .set(Address::getIsDefault, 1);
+                    addressMapper.update(null, setWrapper);
+                }
             }
         }
 
@@ -114,6 +138,7 @@ public class AddressServiceImpl implements AddressService {
     
     @Override
     @Transactional
+    @CacheEvict(value = "addressList", key = "#customerId")
     public boolean setDefaultAddress(Long customerId, Long addressId) {
         // 1. 先将该顾客的所有地址设为非默认
         LambdaUpdateWrapper<Address> clearWrapper = new LambdaUpdateWrapper<>();

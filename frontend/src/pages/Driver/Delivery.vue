@@ -12,10 +12,25 @@
 
                 <el-card shadow="never" class="table-card" v-loading="pendingLoading">
                     <el-table :data="pendingList" stripe>
-                        <el-table-column label="配送ID" prop="id" width="90" align="center" />
-                        <el-table-column label="订单ID" prop="orderId" width="90" align="center" />
-                        <el-table-column label="收货人" prop="receiverName" width="110" />
-                        <el-table-column label="收货电话" prop="receiverPhone" width="130" />
+                        <el-table-column label="配送单号" prop="id" width="90" align="center" />
+                        <el-table-column label="类型" width="100" align="center">
+                            <template #default="{ row }">
+                                <el-tag v-if="row.segmentType === 1" type="primary" size="small">干线运输</el-tag>
+                                <el-tag v-else type="success" size="small">末端配送</el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="收货人" width="110">
+                            <template #default="{ row }">
+                                <span v-if="row.segmentType === 1" class="text-muted">干线任务</span>
+                                <span v-else>{{ row.receiverName || '-' }}</span>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="收货电话" width="130">
+                            <template #default="{ row }">
+                                <span v-if="row.segmentType === 1" class="text-muted">—</span>
+                                <span v-else>{{ row.receiverPhone || '-' }}</span>
+                            </template>
+                        </el-table-column>
                         <el-table-column label="配送地址" prop="deliveryAddress" min-width="200" show-overflow-tooltip />
                         <el-table-column label="创建时间" width="160">
                             <template #default="{ row }">{{ formatDate(row.createTime) }}</template>
@@ -39,7 +54,7 @@
                 </el-card>
             </el-tab-pane>
 
-            <!-- ========== Tab 2: 我的配送 ========== -->
+        <!-- ========== Tab 2: 我的配送 ========== -->
             <el-tab-pane label="我的配送" name="mine">
                 <div class="tab-toolbar">
                     <el-select v-model="mineStatusFilter" placeholder="全部状态" clearable class="status-select" @change="() => { minePage = 1; fetchMine(); }">
@@ -50,7 +65,7 @@
 
                 <el-card shadow="never" class="table-card" v-loading="mineLoading">
                     <el-table :data="mineList" stripe>
-                        <el-table-column label="配送ID" prop="id" width="90" align="center" />
+                        <el-table-column label="配送单号" prop="id" width="90" align="center" />
                         <el-table-column label="收货人" prop="receiverName" width="110" />
                         <el-table-column label="配送地址" prop="deliveryAddress" min-width="180" show-overflow-tooltip />
                         <el-table-column label="状态" width="100">
@@ -66,11 +81,35 @@
                         <el-table-column label="送达时间" width="160">
                             <template #default="{ row }">{{ formatDate(row.deliveryTime) }}</template>
                         </el-table-column>
-                        <el-table-column label="操作" width="180" fixed="right">
+                        <el-table-column label="类型" width="100" align="center">
+                            <template #default="{ row }">
+                                <el-tag v-if="row.segmentType === 1" type="primary" size="small">干线运输</el-tag>
+                                <el-tag v-else-if="row.segmentType === 2" type="success" size="small">末端配送</el-tag>
+                                <span v-else>-</span>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="操作" width="240" fixed="right">
                             <template #default="{ row }">
                                 <el-button size="small" @click="openDetailDialog(row)">详情</el-button>
                                 <el-button size="small" type="primary" v-if="row.deliveryStatus === 1" @click="handleUpdateStatus(row, 2)">开始运输</el-button>
-                                <el-button size="small" type="success" v-if="row.deliveryStatus === 2" @click="handleUpdateStatus(row, 3)">确认送达</el-button>
+                                <!-- 干线司机：到达Hub -->
+                                <el-button size="small" type="warning"
+                                    v-if="row.deliveryStatus === 2 && row.segmentType === 1"
+                                    @click="handleArriveHub(row)">
+                                    到达中转站
+                                </el-button>
+                                <!-- 普通/末端司机：确认送达（多停靠任务需逐站提交，不显示整体确认按钮） -->
+                                <el-button size="small" type="success"
+                                    v-if="row.deliveryStatus === 2 && row.segmentType !== 1 && !(row.segmentType === 2 && !row.orderId)"
+                                    @click="handleUpdateStatus(row, 3)">
+                                    确认送达
+                                </el-button>
+                                <!-- 多停靠任务：提示进入详情逐站确认 -->
+                                <el-button size="small" type="primary" plain
+                                    v-if="row.deliveryStatus === 2 && row.segmentType === 2 && !row.orderId"
+                                    @click="openDetailDialog(row)">
+                                    逐站送达
+                                </el-button>
                                 <el-button size="small" type="danger" v-if="row.deliveryStatus === 1" @click="openCancelDialog(row)">取消</el-button>
                             </template>
                         </el-table-column>
@@ -93,8 +132,14 @@
         <el-dialog v-model="acceptVisible" title="确认接单" width="440px" align-center>
             <div v-if="acceptDeliveryRow" class="accept-info">
                 <el-descriptions :column="1" border size="small">
-                    <el-descriptions-item label="配送ID">{{ acceptDeliveryRow.id }}</el-descriptions-item>
-                    <el-descriptions-item label="收货人">{{ acceptDeliveryRow.receiverName }}</el-descriptions-item>
+                    <el-descriptions-item label="配送单号">{{ acceptDeliveryRow.id }}</el-descriptions-item>
+                    <el-descriptions-item label="任务类型">
+                        <el-tag v-if="acceptDeliveryRow.segmentType === 1" type="primary" size="small">干线运输</el-tag>
+                        <el-tag v-else type="success" size="small">末端配送</el-tag>
+                    </el-descriptions-item>
+                    <template v-if="acceptDeliveryRow.segmentType !== 1">
+                        <el-descriptions-item label="收货人">{{ acceptDeliveryRow.receiverName || '-' }}</el-descriptions-item>
+                    </template>
                     <el-descriptions-item label="配送地址">{{ acceptDeliveryRow.deliveryAddress }}</el-descriptions-item>
                 </el-descriptions>
             </div>
@@ -119,20 +164,26 @@
         </el-dialog>
 
         <!-- ========== 配送详情弹窗 ========== -->
-        <el-dialog v-model="detailVisible" title="配送详情" width="560px" align-center>
+        <el-dialog v-model="detailVisible" title="配送详情" width="600px" align-center>
             <div v-if="detailRow">
                 <el-descriptions :column="2" border size="small">
-                    <el-descriptions-item label="配送ID">{{ detailRow.id }}</el-descriptions-item>
-                    <el-descriptions-item label="订单ID">{{ detailRow.orderId }}</el-descriptions-item>
-                    <el-descriptions-item label="收货人">{{ detailRow.receiverName }}</el-descriptions-item>
-                    <el-descriptions-item label="收货电话">{{ detailRow.receiverPhone }}</el-descriptions-item>
+                    <el-descriptions-item label="配送单号">{{ detailRow.id }}</el-descriptions-item>
+                    <el-descriptions-item label="关联订单">
+                        <span v-if="detailRow.orderId">{{ detailRow.orderId }}</span>
+                        <span v-else-if="detailRow.segmentType === 2">多停靠末端任务</span>
+                        <span v-else>干线任务</span>
+                    </el-descriptions-item>
+                    <template v-if="detailRow.segmentType !== 1">
+                        <el-descriptions-item label="收货人">{{ detailRow.receiverName || '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="收货电话">{{ detailRow.receiverPhone || '-' }}</el-descriptions-item>
+                    </template>
                     <el-descriptions-item label="配送地址" :span="2">{{ detailRow.deliveryAddress }}</el-descriptions-item>
                     <el-descriptions-item label="配送状态">
                         <el-tag :type="deliveryStatusTag(detailRow.deliveryStatus)" size="small">
                             {{ deliveryStatusLabel(detailRow.deliveryStatus) }}
                         </el-tag>
                     </el-descriptions-item>
-                    <el-descriptions-item label="车辆ID">{{ detailRow.vehicleId ?? '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="使用车辆">{{ detailRow.vehicleId ?? '未绑定' }}</el-descriptions-item>
                     <el-descriptions-item label="接单时间">{{ formatDate(detailRow.acceptTime) }}</el-descriptions-item>
                     <el-descriptions-item label="取货时间">{{ formatDate(detailRow.pickupTime) }}</el-descriptions-item>
                     <el-descriptions-item label="送达时间">{{ formatDate(detailRow.deliveryTime) }}</el-descriptions-item>
@@ -140,12 +191,40 @@
                     <el-descriptions-item v-if="detailRow.cancelReason" label="取消原因" :span="2">{{ detailRow.cancelReason }}</el-descriptions-item>
                     <el-descriptions-item label="备注" :span="2">{{ detailRow.remark || '-' }}</el-descriptions-item>
                 </el-descriptions>
+
+                <!-- 多停靠路线：逐站送达列表 -->
+                <template v-if="detailRow.segmentType === 2 && detailRow.routeId && detailStops.length > 1">
+                    <div class="section-title" style="margin-top:16px">
+                        停靠点详情（{{ detailStops.filter((s: any) => s.itemStatus === 2).length }}/{{ detailStops.length }} 已送达）
+                    </div>
+                    <el-alert v-if="detailRow.deliveryStatus === 2"
+                              title="请逐站点击「此站已送达」，全部完成后配送单将自动关闭"
+                              type="info" show-icon :closable="false"
+                              style="margin-bottom:8px;font-size:12px" />
+                    <div v-loading="stopsLoading">
+                        <div v-for="stop in detailStops" :key="stop.orderId" class="stop-row">
+                            <span class="stop-seq">{{ stop.stopSequence }}</span>
+                            <div class="stop-info">
+                                <div class="stop-addr">{{ stop.endAddress }}</div>
+                                <div class="stop-recv">{{ stop.receiverName }} {{ stop.receiverPhone }}</div>
+                            </div>
+                            <el-tag v-if="stop.itemStatus === 2" type="success" size="small">已送达</el-tag>
+                            <el-button
+                                v-else-if="detailRow.deliveryStatus === 2"
+                                size="small" type="primary"
+                                :loading="completingStop === stop.orderId"
+                                @click="handleCompleteStop(detailRow, stop.orderId)"
+                            >此站已送达</el-button>
+                            <el-tag v-else type="info" size="small">待配送</el-tag>
+                        </div>
+                    </div>
+                </template>
             </div>
             <template #footer>
                 <el-button
                     v-if="detailRow && (detailRow.deliveryStatus === 1 || detailRow.deliveryStatus === 2)"
                     type="primary"
-                    @click="goNavigation(detailRow.orderId)"
+                    @click="goNavigation(detailRow.id)"
                 >
                     查看计划路线
                 </el-button>
@@ -176,13 +255,16 @@
     import { Refresh } from '@element-plus/icons-vue';
     import {
         getPendingDeliveries, getMyDeliveries, getMyVehicles,
-        acceptDelivery, updateDeliveryStatus, cancelDelivery, type Vehicle
+        acceptDelivery, updateDeliveryStatus, cancelDelivery,
+        completeDeliveryStop, getRouteStops,
+        type Vehicle
     } from '@/api/driver';
 
     const router = useRouter();
-    const goNavigation = (orderId: number) => {
+    /** 传 delivery.id 到导航页，Navigation.vue 内部根据 delivery 记录决定查哪个接口 */
+    const goNavigation = (deliveryId: number) => {
         detailVisible.value = false;
-        router.push({ path: '/driver/home/navigation', query: { orderId: String(orderId) } });
+        router.push({ path: '/driver/home/navigation', query: { deliveryId: String(deliveryId) } });
     };
 
     const DELIVERY_STATUSES = [
@@ -276,10 +358,65 @@
         fetchMine();
     };
 
+    // ==================== 到达中转站（干线司机专用）====================
+    const handleArriveHub = async (row: any) => {
+        await ElMessageBox.confirm(
+            `确认已到达中转站？\n确认后系统将自动为本批次订单生成末端配送任务，末端司机可接单配送。`,
+            '确认到达中转站', { type: 'warning', confirmButtonText: '确认到达' }
+        );
+        try {
+            const { arriveAtHub } = await import('@/api/logistics');
+            await arriveAtHub(row.id);
+            ElMessage.success('已确认到达中转站，末端配送单正在生成...');
+            fetchMine();
+        } catch (e: any) {
+            ElMessage.error(e?.response?.data?.message || '操作失败');
+        }
+    };
+
     // ==================== 详情弹窗 ====================
     const detailVisible = ref(false);
     const detailRow = ref<any>(null);
-    const openDetailDialog = (row: any) => { detailRow.value = row; detailVisible.value = true; };
+    const detailStops = ref<any[]>([]);
+    const stopsLoading = ref(false);
+    const completingStop = ref<number | null>(null);
+
+    const openDetailDialog = async (row: any) => {
+        detailRow.value = row;
+        detailStops.value = [];
+        detailVisible.value = true;
+        // 末端多停靠路线才加载停靠点
+        if (row.segmentType === 2 && row.routeId) {
+            stopsLoading.value = true;
+            try {
+                const res = await getRouteStops(row.routeId);
+                detailStops.value = res.data ?? [];
+            } catch { /* 非致命 */ } finally {
+                stopsLoading.value = false;
+            }
+        }
+    };
+
+    const handleCompleteStop = async (delivery: any, orderId: number) => {
+        completingStop.value = orderId;
+        try {
+            const res = await completeDeliveryStop(delivery.id, orderId);
+            const msg: string = res.data ?? '本站已送达';
+            ElMessage.success(msg);
+            // 刷新停靠点列表
+            const stopsRes = await getRouteStops(delivery.routeId);
+            detailStops.value = stopsRes.data ?? [];
+            // 如果全部完成，刷新我的配送列表
+            if (msg.includes('配送单已自动关闭')) {
+                detailVisible.value = false;
+                fetchMine();
+            }
+        } catch {
+            ElMessage.error('操作失败，请重试');
+        } finally {
+            completingStop.value = null;
+        }
+    };
 
     // ==================== 取消弹窗 ====================
     const cancelVisible = ref(false);
@@ -344,4 +481,26 @@
     .accept-info { margin-bottom: 4px; }
     .accept-form { padding: 0; }
     .accept-hint { font-size: 12px; color: #909399; margin-top: 4px; }
+
+    /* 多停靠点展示（附近可接任务列表） */
+    .wp-line { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 0; line-height: 1.4; }
+    .wp-seq { background: #409eff; color: #fff; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
+    .wp-name { color: #909399; margin-left: auto; }
+    .text-muted { color: #c0c4cc; font-size: 12px; }
+
+    /* 详情弹窗中的逐站列表 */
+    .section-title { font-weight: 600; font-size: 13px; color: #303133; }
+    .stop-row {
+        display: flex; align-items: center; gap: 10px;
+        padding: 8px 4px; border-bottom: 1px solid #f0f0f0;
+    }
+    .stop-row:last-child { border-bottom: none; }
+    .stop-seq {
+        background: #409eff; color: #fff; border-radius: 50%;
+        width: 22px; height: 22px; display: flex; align-items: center;
+        justify-content: center; font-size: 12px; flex-shrink: 0;
+    }
+    .stop-info { flex: 1; min-width: 0; }
+    .stop-addr { font-size: 13px; color: #303133; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stop-recv { font-size: 12px; color: #909399; margin-top: 2px; }
 </style>

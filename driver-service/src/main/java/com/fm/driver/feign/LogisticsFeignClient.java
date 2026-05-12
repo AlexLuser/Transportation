@@ -4,6 +4,7 @@ import com.fm.common.result.Result;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -49,6 +50,24 @@ public interface LogisticsFeignClient {
             @RequestBody Map<String, Integer> body,
             @RequestHeader("userId") String userId,
             @RequestHeader("roleCode") String roleCode);
+
+    /**
+     * 获取末端路线下所有停靠点（含 itemStatus）
+     */
+    @GetMapping("/api/logistics/batches/routes/{routeId}/stops")
+    Result<List<Map<String, Object>>> getRouteStops(
+            @PathVariable("routeId") Long routeId,
+            @RequestHeader("userId") String userId);
+
+    /**
+     * 标记某停靠点（订单）已送达
+     * 返回 {"allDone": true/false}
+     */
+    @PutMapping("/api/logistics/batches/routes/{routeId}/stops/{orderId}/complete")
+    Result<Map<String, Object>> completeStop(
+            @PathVariable("routeId") Long routeId,
+            @PathVariable("orderId") Long orderId,
+            @RequestHeader("userId") String userId);
 }
 
 

@@ -141,14 +141,14 @@
                 remark: remark.value,
             });
             ElMessage.success('下单成功');
-            router.push('/customer/home/orders');
+            router.push('/sender/home/orders');
         } finally {
             submitting.value = false;
         }
     };
 
     const goToAddress = () => {
-        router.push('/customer/home/profile');
+        router.push('/sender/home/profile');
     };
 
     onMounted(() => {
