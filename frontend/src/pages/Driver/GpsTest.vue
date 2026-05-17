@@ -13,7 +13,7 @@
                 <el-form-item label="选择配送">
                     <el-select
                         v-model="selectedDeliveryId"
-                        placeholder="请选择进行中的配送单"
+                        placeholder="请选择进行中的配送任务"
                         :loading="loadingList"
                         style="width: 320px"
                         @change="handleDeliveryChange"
@@ -21,7 +21,7 @@
                         <el-option
                             v-for="d in inProgress"
                             :key="d.id"
-                            :label="d.segmentType === 1 ? `干线任务 #${d.id}` : d.orderId ? `末端配送 #${d.orderId}` : `末端任务 #${d.id}`"
+                            :label="d.orderId ? `配送任务 #${d.orderId}` : `配送任务 #${d.id}`"
                             :value="d.id"
                         />
                     </el-select>
@@ -102,7 +102,7 @@
             </template>
             <el-empty
                 v-else-if="!loadingList && !selectedDeliveryId"
-                description="请先选择一个进行中的配送单"
+                description="请先选择一个进行中的配送任务"
                 :image-size="60"
             />
         </el-card>
@@ -195,7 +195,7 @@
         loadingList.value = true;
         try {
             const res = await getInProgressDeliveries();
-            inProgress.value = res.data ?? [];
+            inProgress.value = (res.data ?? []).filter((d: any) => d.segmentType !== 1);
         } catch {
             inProgress.value = [];
         } finally {
@@ -214,7 +214,7 @@
 
         loadingRoute.value = true;
         try {
-            // 干线任务 orderId=null，改用 routeId 直接查
+            // 多停靠配送任务 orderId=null，改用 routeId 直接查
             const res = delivery.orderId
                 ? await getRouteByOrderId(delivery.orderId)
                 : await getRouteByRouteId(delivery.routeId);

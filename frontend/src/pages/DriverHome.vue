@@ -6,11 +6,11 @@
                 <el-menu router :default-active="route.path">
                     <el-menu-item index="/driver/home/navigation">
                         <el-icon><Guide /></el-icon>
-                        <span>配送路线</span>
+                        <span>末端路线</span>
                     </el-menu-item>
                     <el-menu-item index="/driver/home/deliveries">
                         <el-icon><Van /></el-icon>
-                        <span>配送管理</span>
+                        <span>配送任务</span>
                     </el-menu-item>
                     <el-menu-item index="/driver/home/vehicles">
                         <el-icon><List /></el-icon>
@@ -43,7 +43,7 @@
                         class="nav-hint"
                         :closable="false"
                     >
-                        当前有 {{ inProgressCount }} 单进行中，
+                        当前有 {{ inProgressCount }} 单配送任务进行中，
                         <el-button type="primary" link @click="$router.push('/driver/home/navigation')">查看计划路线</el-button>
                     </el-alert>
                     <router-view />
@@ -69,7 +69,8 @@
     const refreshInProgress = async () => {
         try {
             const res = await getInProgressDeliveries();
-            inProgressCount.value = (res.data?.length ?? 0) as number;
+            const driverTasks = (res.data ?? []).filter((d: any) => d.segmentType !== 1);
+            inProgressCount.value = driverTasks.length;
         } catch {
             inProgressCount.value = 0;
         }

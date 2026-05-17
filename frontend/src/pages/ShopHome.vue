@@ -6,7 +6,7 @@
                 <el-menu router :default-active="$route.path">
                     <el-menu-item index="/merchant/home/products">
                         <el-icon><Box /></el-icon>
-                        <span>货物管理</span>
+                        <span>承运物管理</span>
                     </el-menu-item>
                     <el-menu-item index="/merchant/home/orders">
                         <el-icon><List /></el-icon>

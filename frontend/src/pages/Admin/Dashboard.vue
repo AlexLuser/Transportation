@@ -64,7 +64,7 @@
 
     const modules = [
         { name: '订单管理', desc: '查看和处理所有订单', path: '/admin/home/orders', icon: markRaw(List), bgColor: '#ecf5ff', iconColor: '#409eff' },
-        { name: '商品管理', desc: '浏览平台全部商品', path: '/admin/home/goods', icon: markRaw(ShoppingBag), bgColor: '#fdf6ec', iconColor: '#e6a23c' },
+        { name: '承运物审核', desc: '审核商户承运物档案', path: '/admin/home/goods', icon: markRaw(ShoppingBag), bgColor: '#fdf6ec', iconColor: '#e6a23c' },
         { name: '用户管理', desc: '查询系统用户信息', path: '/admin/home/users', icon: markRaw(UserFilled), bgColor: '#f0f9eb', iconColor: '#67c23a' },
         { name: '全国干线', desc: '干线调度、全国网络、流量规划', path: '/admin/home/national', icon: markRaw(Connection), bgColor: '#e8f4ff', iconColor: '#409eff' },
         { name: '末端配送', desc: '城市调度、配送批次、中转站、末端仓库', path: '/admin/home/lastmile', icon: markRaw(Van), bgColor: '#fef0f0', iconColor: '#f56c6c' },
@@ -72,8 +72,8 @@
 
     const stats = reactive([
         { label: '仓库总数',   value: '-', color: '#409eff', loading: true },
-        { label: '平台商品数', value: '-', color: '#e6a23c', loading: true },
-        { label: '待揽件订单', value: '-', color: '#67c23a', loading: true },
+        { label: '承运物档案数', value: '-', color: '#e6a23c', loading: true },
+        { label: '待揽收订单', value: '-', color: '#67c23a', loading: true },
     ]);
 
     onMounted(async () => {
@@ -87,7 +87,7 @@
             stats[0].loading = false;
         }
 
-        // 平台商品数：使用 /products/search（管理员可访问全部状态商品，含上架/下架/待审核）
+        // 承运物档案数：复用 /products/search，后端字段暂不改名
         try {
             const res = await adminSearchProducts({ current: 1, size: 1 });
             stats[1].value = String(res.data?.total ?? 0);
@@ -97,7 +97,7 @@
             stats[1].loading = false;
         }
 
-        // 待揽件订单数：使用管理员订单接口查 status=2（待揽件 = 已付款待司机接单）
+        // 待揽收订单数：使用管理员订单接口查 status=2（待揽收 = 已付款待运输员接单）
         try {
             const res = await getAllOrders({ current: 1, size: 1, status: 2 });
             stats[2].value = String(res.data?.total ?? 0);

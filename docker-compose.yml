@@ -75,6 +75,7 @@ services:
 
   nacos:
     image: nacos/nacos-server:v2.3.0
+    platform: linux/amd64
     container_name: transport-nacos
     environment:
       MODE: standalone

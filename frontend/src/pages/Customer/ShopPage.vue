@@ -1,7 +1,7 @@
 <template>
     <div class="shop-page">
         <!-- 返回按钮 -->
-        <el-button :icon="ArrowLeft" @click="router.back()" class="back-btn">返回商品列表</el-button>
+        <el-button :icon="ArrowLeft" @click="router.back()" class="back-btn">返回承运物列表</el-button>
 
         <!-- 商家信息卡片 -->
         <el-card class="shop-info-card" v-loading="shopLoading">
@@ -25,28 +25,28 @@
             <el-empty v-else-if="!shopLoading" description="商家信息不存在" />
         </el-card>
 
-        <!-- 商家商品 -->
+        <!-- 商家承运物 -->
         <div class="shop-products">
-            <div class="section-title">在售商品</div>
+            <div class="section-title">承运物目录</div>
 
             <!-- 搜索栏 -->
             <div class="search-bar">
                 <el-input
                     v-model="keyword"
-                    placeholder="搜索商品名称"
+                    placeholder="搜索承运物名称"
                     clearable
                     class="search-input"
                     @keyup.enter="handleSearch"
                 />
                 <el-select v-model="sortType" class="sort-select" @change="handleSearch">
-                    <el-option label="最新上架" value="createTime_desc" />
-                    <el-option label="价格最低" value="price_asc" />
-                    <el-option label="销量最高" value="salesCount_desc" />
+                    <el-option label="最新创建" value="createTime_desc" />
+                    <el-option label="申报价值最低" value="price_asc" />
+                    <el-option label="发件数最高" value="salesCount_desc" />
                 </el-select>
                 <el-button type="primary" @click="handleSearch">搜索</el-button>
             </div>
 
-            <!-- 商品列表 -->
+            <!-- 承运物列表 -->
             <el-row :gutter="16" v-loading="productsLoading">
                 <el-col :span="6" v-for="product in products" :key="product.id">
                     <el-card class="product-card" shadow="hover">
@@ -72,10 +72,10 @@
                                     ¥{{ product.originalPrice }}
                                 </span>
                             </div>
-                            <div class="product-sales">已售 {{ product.salesCount ?? 0 }} 件</div>
+                            <div class="product-sales">已发 {{ product.salesCount ?? 0 }} 件</div>
                             <div class="product-actions">
                                 <el-button size="small" @click="openDetail(product)">查看详情</el-button>
-                                <el-button size="small" type="primary" @click="goToOrder(product)">立即购买</el-button>
+                                <el-button size="small" type="primary" @click="goToOrder(product)">创建运单</el-button>
                             </div>
                         </div>
                     </el-card>
@@ -83,7 +83,7 @@
             </el-row>
 
             <!-- 空状态 -->
-            <el-empty v-if="!productsLoading && products.length === 0" description="该商家暂无商品" />
+            <el-empty v-if="!productsLoading && products.length === 0" description="该商家暂无承运物" />
 
             <!-- 分页 -->
             <div class="pagination-bar">
@@ -99,7 +99,7 @@
             </div>
         </div>
 
-        <!-- 商品详情弹窗 -->
+        <!-- 承运物详情弹窗 -->
         <el-dialog
             v-model="dialogVisible"
             width="780px"
@@ -125,23 +125,23 @@
                         <span class="dialog-price">¥{{ selectedProduct.price }}</span>
                         <span class="dialog-original-price"
                             v-if="selectedProduct.originalPrice && selectedProduct.originalPrice > selectedProduct.price">
-                            原价 ¥{{ selectedProduct.originalPrice }}
+                            参考价值 ¥{{ selectedProduct.originalPrice }}
                         </span>
                     </div>
                     <el-descriptions :column="1" border>
-                        <el-descriptions-item label="商品编码">{{ selectedProduct.productCode ?? '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="承运物编码">{{ selectedProduct.productCode ?? '-' }}</el-descriptions-item>
                         <el-descriptions-item label="单位">{{ selectedProduct.unit ?? '-' }}</el-descriptions-item>
                         <el-descriptions-item label="重量">{{ selectedProduct.weight ? selectedProduct.weight + ' kg' : '-' }}</el-descriptions-item>
-                        <el-descriptions-item label="销量">{{ selectedProduct.salesCount ?? 0 }} 件</el-descriptions-item>
+                        <el-descriptions-item label="已发件数">{{ selectedProduct.salesCount ?? 0 }} 件</el-descriptions-item>
                     </el-descriptions>
                     <div class="dialog-description" v-if="selectedProduct.description">
-                        <div class="desc-label">商品描述</div>
+                        <div class="desc-label">承运物描述</div>
                         <p>{{ selectedProduct.description }}</p>
                     </div>
                 </div>
             </div>
             <template #footer>
-                <el-button type="primary" @click="goToOrder(selectedProduct)">立即购买</el-button>
+                <el-button type="primary" @click="goToOrder(selectedProduct)">创建运单</el-button>
             </template>
         </el-dialog>
     </div>

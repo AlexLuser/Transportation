@@ -6,7 +6,7 @@
             <div class="toolbar-left">
                 <el-input
                     v-model="keyword"
-                    placeholder="搜索商品名称 / 编码"
+                    placeholder="搜索承运物名称 / 编码"
                     clearable
                     class="search-input"
                     @keyup.enter="handleSearch"
@@ -17,7 +17,7 @@
             <el-button :icon="Refresh" @click="init">刷新</el-button>
         </div>
 
-        <!-- 商品库存表格（可展开查看各仓库明细） -->
+        <!-- 承运物库存表格（可展开查看各仓库明细） -->
         <el-card shadow="never" class="table-card" v-loading="loading">
             <el-table
                 :data="filteredProducts"
@@ -54,7 +54,7 @@
                                 </el-table-column>
                             </el-table>
 
-                            <!-- 在任意仓库新增该商品库存 -->
+                            <!-- 在任意仓库新增该承运物库存 -->
                             <div class="add-stock-row">
                                 <el-button
                                     size="small"
@@ -66,9 +66,9 @@
                     </template>
                 </el-table-column>
 
-                <el-table-column label="商品名称" prop="productName" min-width="160" show-overflow-tooltip />
-                <el-table-column label="商品编码" prop="productCode" width="130" show-overflow-tooltip />
-                <el-table-column label="售价" width="100">
+                <el-table-column label="承运物名称" prop="productName" min-width="160" show-overflow-tooltip />
+                <el-table-column label="承运物编码" prop="productCode" width="130" show-overflow-tooltip />
+                <el-table-column label="申报价值" width="100">
                     <template #default="{ row }">
                         <span class="price-text">¥{{ row.price }}</span>
                     </template>
@@ -84,13 +84,13 @@
                 <el-table-column label="状态" width="90">
                     <template #default="{ row }">
                         <el-tag :type="row.status === 1 ? 'success' : row.status === 0 ? 'info' : 'warning'" size="small">
-                            {{ row.status === 1 ? '上架' : row.status === 0 ? '下架' : '待审核' }}
+                            {{ row.status === 1 ? '启用' : row.status === 0 ? '停用' : '待审核' }}
                         </el-tag>
                     </template>
                 </el-table-column>
             </el-table>
 
-            <el-empty v-if="!loading && filteredProducts.length === 0" description="暂无商品" />
+            <el-empty v-if="!loading && filteredProducts.length === 0" description="暂无承运物" />
         </el-card>
 
         <!-- ===================== 调整库存弹窗 ===================== -->
@@ -101,7 +101,7 @@
             align-center
         >
             <el-form label-width="90px" class="stock-form">
-                <el-form-item label="商品">
+                <el-form-item label="承运物">
                     <el-text>{{ currentProduct?.productName }}</el-text>
                 </el-form-item>
                 <el-form-item label="仓库" v-if="!isAddWarehouse">
@@ -217,7 +217,7 @@
     const newStockValue = ref(0);
     const newWarehouseId = ref<number | null>(null);
 
-    // 当前商品尚未配置库存的仓库列表
+    // 当前承运物尚未配置库存的仓库列表
     const availableWarehouses = computed(() => {
         if (!currentProduct.value?.id) return allWarehouses.value;
         const used = new Set((stockMap.value[currentProduct.value.id as number] ?? []).map((s: any) => s.warehouseId));
@@ -256,7 +256,7 @@
             ElMessage.success('库存更新成功');
             stockDialogVisible.value = false;
 
-            // 刷新该商品的库存数据
+            // 刷新该承运物的库存数据
             const res = await getStockByProduct(productId);
             stockMap.value[productId] = res.data ?? [];
         } finally {

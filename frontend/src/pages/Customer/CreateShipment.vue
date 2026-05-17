@@ -12,7 +12,7 @@
         <el-card v-if="step === 0" class="section-card">
             <template #header>
                 <div class="card-header">
-                    <span>选择取件地址（司机将前往此地取货）</span>
+                    <span>选择取件地址（运输员将前往此地取货）</span>
                     <el-button link type="primary" @click="goToProfile">前往个人中心添加地址</el-button>
                 </div>
             </template>

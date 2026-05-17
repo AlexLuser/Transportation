@@ -297,9 +297,9 @@
                     </el-select>
                 </el-form-item>
                 <el-form-item label="备注"><el-input v-model="inboundForm.remark" type="textarea" /></el-form-item>
-                <el-divider>明细商品</el-divider>
+                <el-divider>承运物明细</el-divider>
                 <div v-for="(item, idx) in inboundForm.items" :key="idx" class="item-row">
-                    <el-select v-model="item.productId" filterable placeholder="搜索并选择商品"
+                    <el-select v-model="item.productId" filterable placeholder="搜索并选择承运物"
                         @change="(val: number) => onPickProduct(val, item)" style="flex:1">
                         <el-option v-for="p in productList" :key="p.id" :label="p.productName" :value="p.id">
                             <span>{{ p.productName }}</span>
@@ -309,7 +309,7 @@
                     <el-input-number v-model="item.expectedQty" :min="1" placeholder="数量" style="width:100px" />
                     <el-button :icon="Delete" circle type="danger" plain size="small" @click="inboundForm.items.splice(idx, 1)" />
                 </div>
-                <el-button size="small" :icon="Plus" @click="inboundForm.items.push({ productId: null, productName: '', expectedQty: 1 })">添加商品</el-button>
+                <el-button size="small" :icon="Plus" @click="inboundForm.items.push({ productId: null, productName: '', expectedQty: 1 })">添加承运物</el-button>
             </el-form>
             <template #footer>
                 <el-button @click="createInboundVisible = false">取消</el-button>
@@ -339,9 +339,9 @@
                 </el-form-item>
                 <el-form-item label="关联订单ID"><el-input-number v-model="outboundForm.relatedId" style="width:100%" /></el-form-item>
                 <el-form-item label="备注"><el-input v-model="outboundForm.remark" type="textarea" /></el-form-item>
-                <el-divider>明细商品</el-divider>
+                <el-divider>承运物明细</el-divider>
                 <div v-for="(item, idx) in outboundForm.items" :key="idx" class="item-row">
-                    <el-select v-model="item.productId" filterable placeholder="搜索并选择商品"
+                    <el-select v-model="item.productId" filterable placeholder="搜索并选择承运物"
                         @change="(val: number) => onPickProduct(val, item)" style="flex:1">
                         <el-option v-for="p in productList" :key="p.id" :label="p.productName" :value="p.id">
                             <span>{{ p.productName }}</span>
@@ -351,7 +351,7 @@
                     <el-input-number v-model="item.quantity" :min="1" placeholder="数量" style="width:100px" />
                     <el-button :icon="Delete" circle type="danger" plain size="small" @click="outboundForm.items.splice(idx, 1)" />
                 </div>
-                <el-button size="small" :icon="Plus" @click="outboundForm.items.push({ productId: null, productName: '', quantity: 1 })">添加商品</el-button>
+                <el-button size="small" :icon="Plus" @click="outboundForm.items.push({ productId: null, productName: '', quantity: 1 })">添加承运物</el-button>
             </el-form>
             <template #footer>
                 <el-button @click="createOutboundVisible = false">取消</el-button>
@@ -404,9 +404,9 @@
                     </el-select>
                 </el-form-item>
                 <el-form-item label="备注"><el-input v-model="transferForm.remark" type="textarea" /></el-form-item>
-                <el-divider>调拨商品</el-divider>
+                <el-divider>调拨承运物</el-divider>
                 <div v-for="(item, idx) in transferForm.items" :key="idx" class="item-row">
-                    <el-select v-model="item.productId" filterable placeholder="搜索并选择商品"
+                    <el-select v-model="item.productId" filterable placeholder="搜索并选择承运物"
                         @change="(val: number) => onPickProduct(val, item)" style="flex:1">
                         <el-option v-for="p in productList" :key="p.id" :label="p.productName" :value="p.id">
                             <span>{{ p.productName }}</span>
@@ -416,7 +416,7 @@
                     <el-input-number v-model="item.quantity" :min="1" placeholder="数量" style="width:100px" />
                     <el-button :icon="Delete" circle type="danger" plain size="small" @click="transferForm.items.splice(idx, 1)" />
                 </div>
-                <el-button size="small" :icon="Plus" @click="transferForm.items.push({ productId: null, productName: '', quantity: 1 })">添加商品</el-button>
+                <el-button size="small" :icon="Plus" @click="transferForm.items.push({ productId: null, productName: '', quantity: 1 })">添加承运物</el-button>
             </el-form>
             <template #footer>
                 <el-button @click="createTransferVisible = false">取消</el-button>
@@ -427,8 +427,8 @@
         <!-- ==================== 明细查看弹窗 ==================== -->
         <el-dialog v-model="itemsDialogVisible" :title="itemsDialogTitle" width="600px">
             <el-table :data="currentItems" stripe size="small">
-                <el-table-column prop="productId" label="商品ID" width="90" />
-                <el-table-column prop="productName" label="商品名称" min-width="140" />
+                <el-table-column prop="productId" label="承运物ID" width="90" />
+                <el-table-column prop="productName" label="承运物名称" min-width="140" />
                 <el-table-column v-if="itemsDialogType === 'inbound'" prop="expectedQty" label="预计数量" width="90" align="center" />
                 <el-table-column v-if="itemsDialogType === 'inbound'" prop="actualQty" label="实际数量" width="90" align="center" />
                 <el-table-column v-if="itemsDialogType !== 'inbound'" prop="quantity" label="数量" width="90" align="center" />
@@ -443,8 +443,8 @@
         <!-- ==================== 盘点明细弹窗 ==================== -->
         <el-dialog v-model="checkItemsDialogVisible" title="盘点明细" width="700px">
             <el-table :data="checkItems" stripe size="small">
-                <el-table-column prop="productId" label="商品ID" width="90" />
-                <el-table-column prop="productName" label="商品名称" min-width="140" />
+                <el-table-column prop="productId" label="承运物ID" width="90" />
+                <el-table-column prop="productName" label="承运物名称" min-width="140" />
                 <el-table-column prop="systemQty" label="系统数量" width="90" align="center" />
                 <el-table-column prop="actualQty" label="实盘数量" width="90" align="center">
                     <template #default="{ row }">
@@ -544,7 +544,7 @@ const loadAllShops = async () => {
     } catch { /* 静默失败 */ }
 };
 
-// 商品列表（根据所选商家动态加载）
+// 承运物列表（根据所选商家动态加载）
 const productList = ref<any[]>([]);
 const loadProductList = async (shopId?: number) => {
     productList.value = [];
@@ -677,7 +677,7 @@ const openCreateInboundDialog = () => {
 const handleCreateInbound = async () => {
     if (!inboundForm.warehouseId) { ElMessage.warning('请选择仓库'); return; }
     if (!inboundForm.items.length || inboundForm.items.some((i: any) => !i.productId)) {
-        ElMessage.warning('请至少添加一个商品明细，且每条明细都需选择商品'); return;
+        ElMessage.warning('请至少添加一个承运物明细，且每条明细都需选择承运物'); return;
     }
     saving.value = true;
     try { await createInboundOrder({ ...inboundForm }); ElMessage.success('入库单已创建'); createInboundVisible.value = false; loadInboundOrders(); }
@@ -719,7 +719,7 @@ const openCreateOutboundDialog = () => {
 const handleCreateOutbound = async () => {
     if (!outboundForm.warehouseId) { ElMessage.warning('请选择仓库'); return; }
     if (!outboundForm.items.length || outboundForm.items.some((i: any) => !i.productId)) {
-        ElMessage.warning('请至少添加一个商品明细，且每条明细都需选择商品'); return;
+        ElMessage.warning('请至少添加一个承运物明细，且每条明细都需选择承运物'); return;
     }
     saving.value = true;
     try { await createOutboundOrder({ ...outboundForm }); ElMessage.success('出库单已创建'); createOutboundVisible.value = false; loadOutboundOrders(); }
@@ -799,7 +799,7 @@ const handleCreateTransfer = async () => {
         ElMessage.warning('调出仓库和调入仓库不能相同'); return;
     }
     if (!transferForm.items.length || transferForm.items.some((i: any) => !i.productId)) {
-        ElMessage.warning('请至少添加一个调拨商品，且每条明细都需选择商品'); return;
+        ElMessage.warning('请至少添加一个调拨承运物，且每条明细都需选择承运物'); return;
     }
     saving.value = true;
     try { await createTransferOrder({ ...transferForm }); ElMessage.success('调拨单已创建'); createTransferVisible.value = false; loadTransferOrders(); }

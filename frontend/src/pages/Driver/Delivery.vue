@@ -3,32 +3,38 @@
 
         <el-tabs v-model="activeTab" class="delivery-tabs" @tab-change="handleTabChange">
 
-            <!-- ========== Tab 1: 待接单大厅 ========== -->
-            <el-tab-pane label="待接单大厅" name="pending">
+            <!-- ========== Tab 1: 待处理 ========== -->
+            <el-tab-pane label="待处理" name="pending">
                 <div class="tab-toolbar">
                     <el-button :icon="Refresh" @click="fetchPending">刷新</el-button>
-                    <span class="result-hint">共 {{ pendingTotal }} 条待接单</span>
+                    <span class="result-hint">共 {{ visiblePendingTotal }} 条待处理配送任务</span>
                 </div>
 
                 <el-card shadow="never" class="table-card" v-loading="pendingLoading">
-                    <el-table :data="pendingList" stripe>
+                    <el-alert
+                        title="运输员端只展示需要当前运输员确认和执行的配送任务；全国干线批次由管理员统一调度。"
+                        type="info"
+                        show-icon
+                        :closable="false"
+                        class="driver-scope-hint"
+                    />
+                    <el-table :data="visiblePendingList" stripe>
                         <el-table-column label="配送单号" prop="id" width="90" align="center" />
-                        <el-table-column label="类型" width="100" align="center">
+                        <el-table-column label="任务来源" width="100" align="center">
                             <template #default="{ row }">
-                                <el-tag v-if="row.segmentType === 1" type="primary" size="small">干线运输</el-tag>
-                                <el-tag v-else type="success" size="small">末端配送</el-tag>
+                                <el-tag :type="row.segmentType === 2 ? 'success' : 'primary'" size="small">
+                                    {{ row.segmentType === 2 ? '末端配送' : '直送' }}
+                                </el-tag>
                             </template>
                         </el-table-column>
                         <el-table-column label="收货人" width="110">
                             <template #default="{ row }">
-                                <span v-if="row.segmentType === 1" class="text-muted">干线任务</span>
-                                <span v-else>{{ row.receiverName || '-' }}</span>
+                                <span>{{ row.receiverName || '-' }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column label="收货电话" width="130">
                             <template #default="{ row }">
-                                <span v-if="row.segmentType === 1" class="text-muted">—</span>
-                                <span v-else>{{ row.receiverPhone || '-' }}</span>
+                                <span>{{ row.receiverPhone || '-' }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column label="配送地址" prop="deliveryAddress" min-width="200" show-overflow-tooltip />
@@ -37,7 +43,7 @@
                         </el-table-column>
                         <el-table-column label="操作" width="90" fixed="right">
                             <template #default="{ row }">
-                                <el-button size="small" type="primary" @click="openAcceptDialog(row)">接单</el-button>
+                                <el-button size="small" type="primary" @click="openAcceptDialog(row)">确认承接</el-button>
                             </template>
                         </el-table-column>
                     </el-table>
@@ -45,17 +51,17 @@
                         <el-pagination
                             v-model:current-page="pendingPage"
                             v-model:page-size="pendingSize"
-                            :total="pendingTotal"
+                            :total="visiblePendingTotal"
                             layout="total, prev, pager, next"
                             @current-change="fetchPending"
                         />
                     </div>
-                    <el-empty v-if="!pendingLoading && pendingList.length === 0" description="暂无待接单订单" />
+                    <el-empty v-if="!pendingLoading && visiblePendingList.length === 0" description="暂无待处理配送任务" />
                 </el-card>
             </el-tab-pane>
 
-        <!-- ========== Tab 2: 我的配送 ========== -->
-            <el-tab-pane label="我的配送" name="mine">
+        <!-- ========== Tab 2: 我的任务 ========== -->
+            <el-tab-pane label="我的任务" name="mine">
                 <div class="tab-toolbar">
                     <el-select v-model="mineStatusFilter" placeholder="全部状态" clearable class="status-select" @change="() => { minePage = 1; fetchMine(); }">
                         <el-option v-for="s in DELIVERY_STATUSES" :key="s.value" :label="s.label" :value="s.value" />
@@ -64,7 +70,7 @@
                 </div>
 
                 <el-card shadow="never" class="table-card" v-loading="mineLoading">
-                    <el-table :data="mineList" stripe>
+                    <el-table :data="visibleMineList" stripe>
                         <el-table-column label="配送单号" prop="id" width="90" align="center" />
                         <el-table-column label="收货人" prop="receiverName" width="110" />
                         <el-table-column label="配送地址" prop="deliveryAddress" min-width="180" show-overflow-tooltip />
@@ -75,7 +81,7 @@
                                 </el-tag>
                             </template>
                         </el-table-column>
-                        <el-table-column label="接单时间" width="160">
+                        <el-table-column label="承接时间" width="160">
                             <template #default="{ row }">{{ formatDate(row.acceptTime) }}</template>
                         </el-table-column>
                         <el-table-column label="送达时间" width="160">
@@ -83,26 +89,18 @@
                         </el-table-column>
                         <el-table-column label="类型" width="100" align="center">
                             <template #default="{ row }">
-                                <el-tag v-if="row.segmentType === 1" type="primary" size="small">干线运输</el-tag>
-                                <el-tag v-else-if="row.segmentType === 2" type="success" size="small">末端配送</el-tag>
-                                <span v-else>-</span>
+                                <el-tag type="primary" size="small">配送任务</el-tag>
                             </template>
                         </el-table-column>
                         <el-table-column label="操作" width="240" fixed="right">
                             <template #default="{ row }">
                                 <el-button size="small" @click="openDetailDialog(row)">详情</el-button>
-                                <el-button size="small" type="primary" v-if="row.deliveryStatus === 1" @click="handleUpdateStatus(row, 2)">开始运输</el-button>
-                                <!-- 干线司机：到达Hub -->
-                                <el-button size="small" type="warning"
-                                    v-if="row.deliveryStatus === 2 && row.segmentType === 1"
-                                    @click="handleArriveHub(row)">
-                                    到达中转站
-                                </el-button>
-                                <!-- 普通/末端司机：确认送达（多停靠任务需逐站提交，不显示整体确认按钮） -->
+                                <el-button size="small" type="primary" v-if="row.deliveryStatus === 1" @click="handleUpdateStatus(row, 2)">开始配送</el-button>
+                                <!-- 普通任务：确认完成（多停靠任务需逐站提交，不显示整体确认按钮） -->
                                 <el-button size="small" type="success"
-                                    v-if="row.deliveryStatus === 2 && row.segmentType !== 1 && !(row.segmentType === 2 && !row.orderId)"
+                                    v-if="row.deliveryStatus === 2 && !(row.segmentType === 2 && !row.orderId)"
                                     @click="handleUpdateStatus(row, 3)">
-                                    确认送达
+                                    确认完成
                                 </el-button>
                                 <!-- 多停靠任务：提示进入详情逐站确认 -->
                                 <el-button size="small" type="primary" plain
@@ -123,23 +121,20 @@
                             @current-change="fetchMine"
                         />
                     </div>
-                    <el-empty v-if="!mineLoading && mineList.length === 0" description="暂无配送记录" />
+                    <el-empty v-if="!mineLoading && visibleMineList.length === 0" description="暂无我的配送任务" />
                 </el-card>
             </el-tab-pane>
         </el-tabs>
 
-        <!-- ========== 接单弹窗 ========== -->
-        <el-dialog v-model="acceptVisible" title="确认接单" width="440px" align-center>
+        <!-- ========== 承接弹窗 ========== -->
+        <el-dialog v-model="acceptVisible" title="确认承接配送任务" width="440px" align-center>
             <div v-if="acceptDeliveryRow" class="accept-info">
                 <el-descriptions :column="1" border size="small">
                     <el-descriptions-item label="配送单号">{{ acceptDeliveryRow.id }}</el-descriptions-item>
                     <el-descriptions-item label="任务类型">
-                        <el-tag v-if="acceptDeliveryRow.segmentType === 1" type="primary" size="small">干线运输</el-tag>
-                        <el-tag v-else type="success" size="small">末端配送</el-tag>
+                        <el-tag type="primary" size="small">配送任务</el-tag>
                     </el-descriptions-item>
-                    <template v-if="acceptDeliveryRow.segmentType !== 1">
-                        <el-descriptions-item label="收货人">{{ acceptDeliveryRow.receiverName || '-' }}</el-descriptions-item>
-                    </template>
+                    <el-descriptions-item label="收货人">{{ acceptDeliveryRow.receiverName || '-' }}</el-descriptions-item>
                     <el-descriptions-item label="配送地址">{{ acceptDeliveryRow.deliveryAddress }}</el-descriptions-item>
                 </el-descriptions>
             </div>
@@ -154,12 +149,12 @@
                             :disabled="v.vehicleStatus !== 1"
                         />
                     </el-select>
-                    <div class="accept-hint">不选车辆也可以接单，稍后补充</div>
+                    <div class="accept-hint">不选车辆也可以承接任务，稍后补充</div>
                 </el-form-item>
             </el-form>
             <template #footer>
                 <el-button @click="acceptVisible = false">取消</el-button>
-                <el-button type="primary" :loading="acceptSubmitting" @click="handleAccept">确认接单</el-button>
+                <el-button type="primary" :loading="acceptSubmitting" @click="handleAccept">确认承接</el-button>
             </template>
         </el-dialog>
 
@@ -171,7 +166,7 @@
                     <el-descriptions-item label="关联订单">
                         <span v-if="detailRow.orderId">{{ detailRow.orderId }}</span>
                         <span v-else-if="detailRow.segmentType === 2">多停靠末端任务</span>
-                        <span v-else>干线任务</span>
+                        <span v-else>配送任务</span>
                     </el-descriptions-item>
                     <template v-if="detailRow.segmentType !== 1">
                         <el-descriptions-item label="收货人">{{ detailRow.receiverName || '-' }}</el-descriptions-item>
@@ -184,7 +179,7 @@
                         </el-tag>
                     </el-descriptions-item>
                     <el-descriptions-item label="使用车辆">{{ detailRow.vehicleId ?? '未绑定' }}</el-descriptions-item>
-                    <el-descriptions-item label="接单时间">{{ formatDate(detailRow.acceptTime) }}</el-descriptions-item>
+                    <el-descriptions-item label="承接时间">{{ formatDate(detailRow.acceptTime) }}</el-descriptions-item>
                     <el-descriptions-item label="取货时间">{{ formatDate(detailRow.pickupTime) }}</el-descriptions-item>
                     <el-descriptions-item label="送达时间">{{ formatDate(detailRow.deliveryTime) }}</el-descriptions-item>
                     <el-descriptions-item label="取消时间">{{ formatDate(detailRow.cancelTime) }}</el-descriptions-item>
@@ -249,7 +244,7 @@
 </template>
 
 <script setup lang="ts" name="DriverDelivery">
-    import { ref, onMounted } from 'vue';
+    import { computed, ref, onMounted } from 'vue';
     import { useRouter } from 'vue-router';
     import { ElMessage, ElMessageBox } from 'element-plus';
     import { Refresh } from '@element-plus/icons-vue';
@@ -268,18 +263,20 @@
     };
 
     const DELIVERY_STATUSES = [
-        { value: 1, label: '已接单' }, { value: 2, label: '运输中' },
+        { value: 1, label: '已承接' }, { value: 2, label: '配送中' },
         { value: 3, label: '已送达' }, { value: 4, label: '已取消' },
     ];
 
     const activeTab = ref('pending');
 
-    // ==================== 待接单大厅 ====================
+    // ==================== 待处理配送任务 ====================
     const pendingLoading = ref(false);
     const pendingList = ref<any[]>([]);
     const pendingPage = ref(1);
     const pendingSize = ref(10);
     const pendingTotal = ref(0);
+    const visiblePendingList = computed(() => pendingList.value.filter(isDriverSideTask));
+    const visiblePendingTotal = computed(() => visiblePendingList.value.length);
 
     const fetchPending = async () => {
         pendingLoading.value = true;
@@ -299,6 +296,7 @@
     const mineSize = ref(10);
     const mineTotal = ref(0);
     const mineStatusFilter = ref<number | null>(null);
+    const visibleMineList = computed(() => mineList.value.filter(isDriverSideTask));
 
     const fetchMine = async () => {
         mineLoading.value = true;
@@ -319,13 +317,13 @@
         else fetchMine();
     };
 
-    // ==================== 我的车辆（接单时用） ====================
+    // ==================== 我的车辆（承接任务时用） ====================
     const myVehicles = ref<Vehicle[]>([]);
     const loadVehicles = async () => {
         try { const res = await getMyVehicles(); myVehicles.value = res.data ?? []; } catch { /**/ }
     };
 
-    // ==================== 接单弹窗 ====================
+    // ==================== 承接弹窗 ====================
     const acceptVisible = ref(false);
     const acceptDeliveryRow = ref<any>(null);
     const selectedVehicleId = ref<number | null>(null);
@@ -341,7 +339,7 @@
         acceptSubmitting.value = true;
         try {
             await acceptDelivery(acceptDeliveryRow.value.id, selectedVehicleId.value ?? undefined);
-            ElMessage.success('接单成功！请及时取货配送');
+            ElMessage.success('任务承接成功！请及时取货配送');
             acceptVisible.value = false;
             fetchPending();
         } finally {
@@ -351,27 +349,11 @@
 
     // ==================== 更新状态 ====================
     const handleUpdateStatus = async (row: any, status: number) => {
-        const label = status === 2 ? '开始运输' : '确认送达';
+        const label = status === 2 ? '开始配送' : '确认完成';
         await ElMessageBox.confirm(`确认执行「${label}」操作？`, '操作确认', { type: 'info' });
         await updateDeliveryStatus(row.id, status);
         ElMessage.success(`操作成功：${label}`);
         fetchMine();
-    };
-
-    // ==================== 到达中转站（干线司机专用）====================
-    const handleArriveHub = async (row: any) => {
-        await ElMessageBox.confirm(
-            `确认已到达中转站？\n确认后系统将自动为本批次订单生成末端配送任务，末端司机可接单配送。`,
-            '确认到达中转站', { type: 'warning', confirmButtonText: '确认到达' }
-        );
-        try {
-            const { arriveAtHub } = await import('@/api/logistics');
-            await arriveAtHub(row.id);
-            ElMessage.success('已确认到达中转站，末端配送单正在生成...');
-            fetchMine();
-        } catch (e: any) {
-            ElMessage.error(e?.response?.data?.message || '操作失败');
-        }
     };
 
     // ==================== 详情弹窗 ====================
@@ -440,9 +422,10 @@
     };
 
     // ==================== 工具函数 ====================
-    const deliveryStatusLabel = (s: number) => ({ 0: '待接单', 1: '已接单', 2: '运输中', 3: '已送达', 4: '已取消' } as any)[s] ?? '-';
+    const deliveryStatusLabel = (s: number) => ({ 0: '待承接', 1: '已承接', 2: '配送中', 3: '已送达', 4: '已取消' } as any)[s] ?? '-';
     const deliveryStatusTag = (s: number) => ({ 0: 'info', 1: '', 2: 'primary', 3: 'success', 4: 'danger' } as any)[s] ?? '';
     const formatDate = (d: string | null | undefined) => d ? new Date(d).toLocaleString('zh-CN', { hour12: false }) : '-';
+    const isDriverSideTask = (row: any) => row?.segmentType !== 1;
 
     onMounted(() => { fetchPending(); loadVehicles(); });
 </script>
@@ -474,10 +457,11 @@
         border-radius: 0 0 8px 8px;
         border-top: none;
     }
+    .driver-scope-hint { margin-bottom: 12px; }
 
     .pagination-bar { display: flex; justify-content: flex-end; padding: 16px 0 4px; }
 
-    /* 接单弹窗 */
+    /* 承接弹窗 */
     .accept-info { margin-bottom: 4px; }
     .accept-form { padding: 0; }
     .accept-hint { font-size: 12px; color: #909399; margin-top: 4px; }

@@ -1,4 +1,4 @@
-FROM maven:3.9-eclipse-temurin-17-alpine AS builder
+FROM maven:3.9-eclipse-temurin-17 AS builder
 WORKDIR /build
 COPY pom.xml .
 COPY common ./common
@@ -12,7 +12,7 @@ COPY driver-service/pom.xml   ./driver-service/pom.xml
 COPY logistics-service ./logistics-service
 RUN mvn package -pl logistics-service -am -DskipTests -q
 
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre
 WORKDIR /app
 COPY --from=builder /build/logistics-service/target/*.jar app.jar
 # OSM 文件和 graph-cache 通过 docker-compose volumes 挂载进来

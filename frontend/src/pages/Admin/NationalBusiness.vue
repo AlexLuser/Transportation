@@ -1,7 +1,7 @@
 <template>
   <div class="national-business">
     <el-tabs v-model="activeTab" type="card" class="ops-tabs">
-      <el-tab-pane label="干线调度" name="trunk" lazy>
+      <el-tab-pane label="全国干线" name="trunk" lazy>
         <NationalTrunkDispatch />
       </el-tab-pane>
       <el-tab-pane label="全国网络" name="network" lazy>

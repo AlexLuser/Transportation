@@ -138,14 +138,14 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             return "shop".equals(roleCode);
         }
         
-        // 商品服务：shop和customer都可以访问（shop管理，customer浏览）
+        // 承运物（商品）服务：商户管理、管理员审核；消费者不直接访问商品接口
         if (path.startsWith("/api/products")) {
-            return "shop".equals(roleCode) || "customer".equals(roleCode);
+            return "shop".equals(roleCode) || "admin".equals(roleCode);
         }
         
-        // 商城服务：所有登录用户都可以访问（customer浏览，shop也可以查看）
+        // 商城服务：仅商户和管理员可访问（ToB物流平台，消费者不作为商城浏览主体）
         if (path.startsWith("/api/mall")) {
-            return "shop".equals(roleCode) || "customer".equals(roleCode) || "admin".equals(roleCode);
+            return "shop".equals(roleCode) || "admin".equals(roleCode);
         }
         
         // 仓库服务：只允许shop角色访问
@@ -163,7 +163,7 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             return "driver".equals(roleCode) || "admin".equals(roleCode);
         }
 
-        // 物流路线查询：买家、商户、运输员、管理员均可查询
+        // 物流路线查询：发货用户、商户、运输员、管理员均可查询
         if (path.startsWith("/api/logistics/routes")) {
             return "customer".equals(roleCode) || "shop".equals(roleCode)
                     || "driver".equals(roleCode) || "admin".equals(roleCode);

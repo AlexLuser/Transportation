@@ -16,9 +16,9 @@
                 </el-form-item>
                 <el-form-item label="注册角色" prop="role">
                     <el-radio-group v-model="form.role">
-                        <el-radio value="customer">顾客</el-radio>
+                        <el-radio value="customer">发货用户</el-radio>
                         <el-radio value="shop">商户</el-radio>
-                        <el-radio value="driver">司机</el-radio>
+                        <el-radio value="driver">运输员</el-radio>
                     </el-radio-group>
                 </el-form-item>
 
@@ -87,11 +87,11 @@
                     style="margin-bottom: 16px;"
                 >
                     <template #title>
-                        {{ form.role === 'shop' ? '商户' : '司机' }}注册后需等待管理员审核，审核通过后方可登录系统。
+                        {{ form.role === 'shop' ? '商户' : '运输员' }}注册后需等待管理员审核，审核通过后方可登录系统。
                     </template>
                 </el-alert>
                 <el-alert v-if="form.role === 'customer'" type="success" :closable="false" style="margin-bottom: 16px;">
-                    <template #title>顾客注册后可直接登录。</template>
+                    <template #title>发货用户注册后可直接登录，用于创建个人运单和查看物流进度。</template>
                 </el-alert>
 
                 <el-form-item>

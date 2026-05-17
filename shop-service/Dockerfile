@@ -1,4 +1,4 @@
-FROM maven:3.9-eclipse-temurin-17-alpine AS builder
+FROM maven:3.9-eclipse-temurin-17 AS builder
 WORKDIR /build
 COPY pom.xml .
 COPY common ./common
@@ -12,7 +12,7 @@ COPY logistics-service/pom.xml ./logistics-service/pom.xml
 COPY shop-service ./shop-service
 RUN mvn package -pl shop-service -am -DskipTests -q
 
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre
 WORKDIR /app
 COPY --from=builder /build/shop-service/target/*.jar app.jar
 EXPOSE 8084

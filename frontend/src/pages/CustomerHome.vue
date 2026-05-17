@@ -8,10 +8,6 @@
                         <el-icon><Promotion /></el-icon>
                         <span>发起寄件</span>
                     </el-menu-item>
-                    <el-menu-item index="/sender/home/products">
-                        <el-icon><Box /></el-icon>
-                        <span>货物目录</span>
-                    </el-menu-item>
                     <el-menu-item index="/sender/home/orders">
                         <el-icon><List /></el-icon>
                         <span>我的运单</span>
@@ -43,7 +39,7 @@
     import { logout } from '@/api/auth';
     import { router } from '@/router';
     import { useUserStore } from '@/stores/userStore';
-    import { Box, List, User, Promotion } from '@element-plus/icons-vue';
+    import { List, User, Promotion } from '@element-plus/icons-vue';
 
     const userStore = useUserStore();
 

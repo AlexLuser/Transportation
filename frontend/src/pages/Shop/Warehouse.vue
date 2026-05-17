@@ -190,9 +190,9 @@
                     </el-select>
                 </el-form-item>
                 <el-form-item label="备注"><el-input v-model="inboundForm.remark" type="textarea" /></el-form-item>
-                <el-divider>商品明细（必须至少添加一件）</el-divider>
+                <el-divider>承运物明细（必须至少添加一件）</el-divider>
                 <div v-for="(item, idx) in inboundForm.items" :key="idx" class="item-row">
-                    <el-select v-model="item.productId" filterable placeholder="搜索并选择商品"
+                    <el-select v-model="item.productId" filterable placeholder="搜索并选择承运物"
                         @change="(val: number) => onPickProduct(val, item)" style="flex:1">
                         <el-option v-for="p in productList" :key="p.id"
                             :label="p.productName" :value="p.id">
@@ -204,8 +204,8 @@
                     <el-button :icon="Delete" type="danger" plain circle size="small" @click="inboundForm.items.splice(idx,1)" />
                 </div>
                 <el-alert v-if="inboundForm.items.length === 0" type="warning" show-icon :closable="false"
-                    title="请至少添加一个商品明细" style="margin-bottom:8px" />
-                <el-button size="small" :icon="Plus" @click="inboundForm.items.push({productId:null,productName:'',expectedQty:1})">添加商品</el-button>
+                    title="请至少添加一个承运物明细" style="margin-bottom:8px" />
+                <el-button size="small" :icon="Plus" @click="inboundForm.items.push({productId:null,productName:'',expectedQty:1})">添加承运物</el-button>
             </el-form>
             <template #footer>
                 <el-button @click="createInboundVisible = false">取消</el-button>
@@ -233,12 +233,12 @@
                     </el-select>
                 </el-form-item>
                 <el-form-item label="备注"><el-input v-model="transferForm.remark" type="textarea" /></el-form-item>
-                <el-divider>调拨商品（仅显示调出仓库有库存的商品）</el-divider>
+                <el-divider>调拨承运物（仅显示调出仓库有库存的承运物）</el-divider>
                 <div v-if="transferForm.srcWarehouseId && srcWarehouseStock.length === 0" style="color:#909399;font-size:13px;margin-bottom:8px">
-                    调出仓库暂无库存商品
+                    调出仓库暂无库存承运物
                 </div>
                 <div v-for="(item, idx) in transferForm.items" :key="idx" class="item-row">
-                    <el-select v-model="item.productId" filterable placeholder="选择调出仓库的商品"
+                    <el-select v-model="item.productId" filterable placeholder="选择调出仓库的承运物"
                         @change="(val: number) => onPickTransferProduct(val, item)" style="flex:1"
                         :disabled="!transferForm.srcWarehouseId">
                         <el-option v-for="s in srcWarehouseStock" :key="s.productId"
@@ -252,10 +252,10 @@
                     <el-button :icon="Delete" type="danger" plain circle size="small" @click="transferForm.items.splice(idx,1)" />
                 </div>
                 <el-alert v-if="transferForm.items.length === 0" type="warning" show-icon :closable="false"
-                    title="请至少添加一个调拨商品" style="margin-bottom:8px" />
+                    title="请至少添加一个调拨承运物" style="margin-bottom:8px" />
                 <el-button size="small" :icon="Plus"
                     :disabled="!transferForm.srcWarehouseId || srcWarehouseStock.length === 0"
-                    @click="transferForm.items.push({productId:null,productName:'',quantity:1})">添加商品</el-button>
+                    @click="transferForm.items.push({productId:null,productName:'',quantity:1})">添加承运物</el-button>
             </el-form>
             <template #footer>
                 <el-button @click="createTransferVisible = false">取消</el-button>
@@ -266,8 +266,8 @@
         <!-- 明细查看弹窗 -->
         <el-dialog v-model="itemsDialogVisible" :title="itemsDialogTitle" width="560px">
             <el-table :data="currentItems" stripe size="small">
-                <el-table-column prop="productId" label="商品ID" width="80" />
-                <el-table-column prop="productName" label="商品名称" min-width="140" />
+                <el-table-column prop="productId" label="承运物ID" width="90" />
+                <el-table-column prop="productName" label="承运物名称" min-width="140" />
                 <el-table-column v-if="itemsType === 'inbound'" prop="expectedQty" label="预计" width="80" align="center" />
                 <el-table-column v-if="itemsType === 'inbound'" prop="actualQty" label="实际" width="80" align="center" />
                 <el-table-column v-if="itemsType !== 'inbound'" prop="quantity" label="数量" width="80" align="center" />
@@ -314,7 +314,7 @@ const statusLabelMap: Record<string, string> = { PENDING: '待处理', PROCESSIN
 const transferStatusTypeMap: Record<string, string> = { PENDING: 'warning', APPROVED: 'primary', IN_TRANSIT: 'warning', DONE: 'success', CANCELLED: 'danger' };
 const transferStatusLabelMap: Record<string, string> = { PENDING: '待执行', APPROVED: '待执行', IN_TRANSIT: '在途', DONE: '已完成', CANCELLED: '已取消' };
 
-// 商品列表（入库用，显示所有商品）
+// 承运物列表（入库用，显示所有承运物）
 const productList = ref<any[]>([]);
 const loadProducts = async () => {
     if (!shopId.value) return;
@@ -329,7 +329,7 @@ const onPickProduct = (productId: number, item: any) => {
     if (p) item.productName = p.productName;
 };
 
-// 调出仓库库存（调拨用，仅显示源仓库有库存的商品）
+// 调出仓库库存（调拨用，仅显示源仓库有库存的承运物）
 const srcWarehouseStock = ref<any[]>([]);
 const onSrcWarehouseChange = async (warehouseId: number) => {
     transferForm.items = [];
@@ -409,7 +409,7 @@ function validateItems(items: any[], label: string): boolean {
         return false;
     }
     if (items.some((i: any) => !i.productId)) {
-        ElMessage.warning('有明细未选择商品，请补充后提交');
+        ElMessage.warning('有明细未选择承运物，请补充后提交');
         return false;
     }
     return true;
@@ -436,7 +436,7 @@ const openCreateInbound = () => {
 };
 const handleCreateInbound = async () => {
     if (!inboundForm.warehouseId) { ElMessage.warning('请选择仓库'); return; }
-    if (!validateItems(inboundForm.items, '商品')) return;
+    if (!validateItems(inboundForm.items, '承运物')) return;
     saving.value = true;
     try {
         await createInboundOrder({ ...inboundForm, shopId: shopId.value });
@@ -502,12 +502,12 @@ const handleCreateTransfer = async () => {
     if (transferForm.srcWarehouseId === transferForm.dstWarehouseId) {
         ElMessage.warning('调出仓库和调入仓库不能相同'); return;
     }
-    if (!validateItems(transferForm.items, '调拨商品')) return;
+    if (!validateItems(transferForm.items, '调拨承运物')) return;
     // 校验数量不超过库存
     for (const item of transferForm.items) {
         const max = getStockMax(item.productId);
         if (item.quantity > max) {
-            ElMessage.warning(`商品「${item.productName}」调拨数量 (${item.quantity}) 超过库存 (${max})`);
+            ElMessage.warning(`承运物「${item.productName}」调拨数量 (${item.quantity}) 超过库存 (${max})`);
             return;
         }
     }

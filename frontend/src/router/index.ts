@@ -75,7 +75,7 @@ const routes = [
         path: '/sender/home',
         component: () => import('@/pages/CustomerHome.vue'),
         meta: {role: 'customer'},
-        redirect: '/sender/home/products',
+        redirect: '/sender/home/shipment',
         children: [
             {
                 path: 'products',

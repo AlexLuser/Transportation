@@ -5,7 +5,7 @@
                 <el-tab-pane label="全部运单" name="all"/>
                 <el-tab-pane label="待支付" name="0"/>
                 <el-tab-pane label="待发货" name="1"/>
-                <el-tab-pane label="待揽件" name="2"/>
+                <el-tab-pane label="待揽收" name="2"/>
                 <el-tab-pane label="派送中" name="3"/>
                 <el-tab-pane label="待签收" name="6"/>
                 <el-tab-pane label="已完成" name="4"/>
@@ -28,7 +28,7 @@
                     </div>
                     <div class="order-body">
                         <div class="amount-details">
-                            <span>货物金额：¥{{ order.productAmount }}</span>
+                            <span>申报价值：¥{{ order.productAmount }}</span>
                             <span>运费：¥{{ order.shippingFee }}</span>
                         </div>
                         <div class="amount-total">
@@ -79,7 +79,7 @@
                         </el-descriptions-item>
                         <el-descriptions-item label="下单时间">{{ formatDate(currentDetail.order?.createTime) }}</el-descriptions-item>
                         <el-descriptions-item label="支付时间">{{ formatDate(currentDetail.order?.paymentTime) }}</el-descriptions-item>
-                        <el-descriptions-item label="货物金额">¥{{ currentDetail.order?.productAmount }}</el-descriptions-item>
+                        <el-descriptions-item label="申报价值">¥{{ currentDetail.order?.productAmount }}</el-descriptions-item>
                         <el-descriptions-item label="运费">¥{{ currentDetail.order?.shippingFee }}</el-descriptions-item>
                         <el-descriptions-item label="合计费用" :span="2">
                             <span class="detail-total">¥{{ currentDetail.order?.totalAmount }}</span>
@@ -127,7 +127,7 @@
                     <div class="section-title">物流全程追踪</div>
                     <el-empty
                         v-if="currentDetail.order?.orderStatus === 2 && (!orderJourney || orderJourney.length === 0)"
-                        description="运单已进入调度池，等待司机揽件，物流轨迹将在揽件后更新"
+                        description="运单已进入调度池，等待运输员揽收，物流轨迹将在揽收后更新"
                         :image-size="60"
                     />
                     <LogisticsJourney
@@ -244,7 +244,7 @@
         const map: Record<number, string> = {
             0: '待支付',
             1: '待发货',
-            2: '待揽件',
+            2: '待揽收',
             3: '派送中',
             6: '待签收',
             4: '已完成',
@@ -256,7 +256,7 @@
     const handleSign = async (orderId: number) => {
         try {
             await ElMessageBox.confirm(
-                '确认已收到商品？确认后订单将标记为已完成。',
+                '确认已收到承运物？确认后运单将标记为已完成。',
                 '确认签收',
                 { confirmButtonText: '确认签收', cancelButtonText: '取消', type: 'success' }
             );

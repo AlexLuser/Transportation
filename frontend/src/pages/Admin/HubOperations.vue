@@ -33,22 +33,22 @@
 
     <!-- 四阶段内容区 -->
     <el-row :gutter="16" class="pipeline-row">
-      <!-- Stage 0：揽收队列 -->
-      <el-col :span="6">
+      <!-- Stage 0：待揽收 -->
+      <el-col :span="4">
         <div class="stage-card" :class="{ 'stage-active': activeStage === 0 }">
           <div class="stage-header" style="border-left:4px solid #e6a23c">
             <el-icon color="#e6a23c"><Van /></el-icon>
-            <span class="stage-title">揽收队列</span>
+            <span class="stage-title">待揽收</span>
             <el-badge :value="poolItems.length" class="badge" />
           </div>
-          <div class="stage-desc">商家已发货，等待司机上门取件</div>
+          <div class="stage-desc">商家已发货，等待运输员上门取件</div>
           <div class="stage-body">
             <div v-if="!selectedHubId" class="empty-hint">请先选择中转站</div>
             <div v-else-if="poolItems.length === 0" class="empty-hint">暂无待揽收订单</div>
             <div v-for="item in poolItems" :key="item.orderId" class="flow-card orange">
               <div class="card-top">
                 <span class="order-no">订单 #{{ item.orderId }}</span>
-                <el-tag size="small" type="warning">待揽件</el-tag>
+                <el-tag size="small" type="warning">待揽收</el-tag>
               </div>
               <div class="card-row"><el-icon><Location /></el-icon> {{ item.endAddress || '目的地未知' }}</div>
               <div class="card-row"><el-icon><Tickets /></el-icon> 跨城：{{ item.isCrossCity ? '是' : '否' }}</div>
@@ -71,7 +71,7 @@
       </el-col>
 
       <!-- Stage 1：待入库 -->
-      <el-col :span="6">
+      <el-col :span="4">
         <div class="stage-card" :class="{ 'stage-active': activeStage === 1 }">
           <div class="stage-header" style="border-left:4px solid #409eff">
             <el-icon color="#409eff"><Download /></el-icon>
@@ -111,7 +111,7 @@
       </el-col>
 
       <!-- Stage 2：待分拣 -->
-      <el-col :span="6">
+      <el-col :span="4">
         <div class="stage-card" :class="{ 'stage-active': activeStage === 2 }">
           <div class="stage-header" style="border-left:4px solid #67c23a">
             <el-icon color="#67c23a"><Sort /></el-icon>
@@ -144,9 +144,34 @@
         </div>
       </el-col>
 
-      <!-- Stage 3：干线运输 -->
-      <el-col :span="6">
+      <!-- Stage 3：待出库 -->
+      <el-col :span="4">
         <div class="stage-card" :class="{ 'stage-active': activeStage === 3 }">
+          <div class="stage-header" style="border-left:4px solid #9b59b6">
+            <el-icon color="#9b59b6"><Upload /></el-icon>
+            <span class="stage-title">待出库</span>
+            <el-badge :value="outboundPending.length" class="badge" />
+          </div>
+          <div class="stage-desc">分拣完成，待出库装车发运</div>
+          <div class="stage-body">
+            <div v-if="!selectedHubId" class="empty-hint">请先选择中转站</div>
+            <div v-else-if="outboundPending.length === 0" class="empty-hint">暂无待出库记录</div>
+            <div v-for="rec in outboundPending" :key="rec.id" class="flow-card purple">
+              <div class="card-top">
+                <span class="order-no">出库单 #{{ rec.id }}</span>
+                <el-tag size="small" type="warning">待出库</el-tag>
+              </div>
+              <div class="card-row" v-if="rec.orderId"><el-icon><Document /></el-icon> 关联订单 #{{ rec.orderId }}</div>
+              <div class="card-row"><el-icon><Clock /></el-icon> {{ formatTime(rec.createTime) }} 登记</div>
+              <div v-if="rec.remark" class="card-row"><el-icon><ChatLineSquare /></el-icon> {{ rec.remark }}</div>
+            </div>
+          </div>
+        </div>
+      </el-col>
+
+      <!-- Stage 4：干线运输 -->
+      <el-col :span="4">
+        <div class="stage-card" :class="{ 'stage-active': activeStage === 4 }">
           <div class="stage-header" style="border-left:4px solid #909399">
             <el-icon color="#909399"><Promotion /></el-icon>
             <span class="stage-title">干线运输</span>
@@ -235,7 +260,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
-  Refresh, Plus, Check, Van, Download, Sort, Promotion, Location, Tickets, Document, Clock,
+  Refresh, Plus, Check, Van, Download, Upload, Sort, Promotion, Location, Tickets, Document, Clock,
   Aim, InfoFilled, ChatLineSquare
 } from '@element-plus/icons-vue';
 import {
@@ -247,7 +272,7 @@ import {
 } from '@/api/logistics';
 
 const loading = ref(false);
-const batchLoading = ref({ pool: false, inbound: false, trunk: false });
+const batchLoading = ref({ pool: false, inbound: false, sorting: false, outbound: false, trunk: false });
 const selectedHubId = ref<number | null>(null);
 const hubList = ref<any[]>([]);
 
@@ -255,6 +280,7 @@ const hubList = ref<any[]>([]);
 const poolItems = ref<any[]>([]);
 const inboundPending = ref<any[]>([]);
 const sortingPending = ref<any[]>([]);
+const outboundPending = ref<any[]>([]);
 const nationalBatches = ref<any[]>([]);
 
 // 弹窗控制
@@ -267,9 +293,10 @@ const sortingForm = ref({ orderId: null as number | null, destHubId: null as num
 const activeStage = ref(0);
 
 const stages = computed(() => [
-  { name: '揽收队列', count: poolItems.value.length, color: '#e6a23c', icon: Van },
+  { name: '待揽收', count: poolItems.value.length, color: '#e6a23c', icon: Van },
   { name: '待入库',   count: inboundPending.value.length, color: '#409eff', icon: Download },
   { name: '待分拣',   count: sortingPending.value.length, color: '#67c23a', icon: Sort },
+  { name: '待出库',   count: outboundPending.value.length, color: '#9b59b6', icon: Upload },
   { name: '干线运输', count: nationalBatches.value.length, color: '#909399', icon: Promotion },
 ]);
 
@@ -277,7 +304,7 @@ onMounted(async () => {
   await loadHubsWithOrders();
 });
 
-/** 加载城市配送中心列表，并自动过滤：只显示存在揽收队列的 Hub */
+/** 加载城市配送中心列表，并自动过滤：只显示存在待揽收订单的 Hub */
 async function loadHubsWithOrders() {
   loading.value = true;
   try {
@@ -285,7 +312,7 @@ async function loadHubsWithOrders() {
     const allHubs: any[] = res.data || [];
     if (allHubs.length === 0) return;
 
-    // 并行查询每个 Hub 的揽收队列数量
+    // 并行查询每个 Hub 的待揽收数量
     const checks = await Promise.all(
       allHubs.map(h =>
         getCollectionQueue(h.id)
@@ -312,7 +339,7 @@ async function loadAll() {
   if (!selectedHubId.value) return;
   loading.value = true;
   try {
-    await Promise.all([loadPool(), loadInbound(), loadSorting(), loadBatches()]);
+    await Promise.all([loadPool(), loadInbound(), loadSorting(), loadOutbound(), loadBatches()]);
   } finally {
     loading.value = false;
   }
@@ -324,7 +351,7 @@ async function loadPool() {
     getCollectionQueue(selectedHubId.value!),
     getHubInboundRecords(selectedHubId.value!),  // 不限状态，获取所有已建入库记录
   ]);
-  // 过滤：已有入库记录的订单从揽收队列移除，避免重复操作
+  // 过滤：已有入库记录的订单从待揽收列表移除，避免重复操作
   const inboundedOrderIds = new Set(
     (inboundRes.data || []).map((r: any) => r.orderId).filter(Boolean)
   );
@@ -343,6 +370,11 @@ async function loadSorting() {
   sortingPending.value = res.data || [];
 }
 
+async function loadOutbound() {
+  const res = await getHubOutboundRecords(selectedHubId.value!, 'PENDING');
+  outboundPending.value = res.data || [];
+}
+
 async function loadBatches() {
   const res = await getNationalBatches();
   const all: any[] = res.data || [];
@@ -354,7 +386,7 @@ async function loadBatches() {
 // 从揽收快速创建入库记录
 async function doCreateInbound(item: any) {
   if (!selectedHubId.value) return;
-  await createHubInboundRecord({ hubId: selectedHubId.value, orderId: item.orderId, remark: '由揽收队列登记' });
+  await createHubInboundRecord({ hubId: selectedHubId.value, orderId: item.orderId, remark: '由待揽收登记' });
   ElMessage.success(`订单 #${item.orderId} 已登记入库，等待确认`);
   await loadAll();
 }
@@ -402,11 +434,11 @@ async function doArriveBatch(id: number) {
   await loadBatches();
 }
 
-// 批量：揽收队列 → 全部到仓
+// 批量：待揽收 → 全部到仓
 async function batchCreateInbound() {
   if (!poolItems.value.length) return;
   await ElMessageBox.confirm(
-    `确认将揽收队列中全部 ${poolItems.value.length} 笔订单批量登记入库？`,
+    `确认将待揽收列表中全部 ${poolItems.value.length} 笔订单批量登记入库？`,
     '批量确认到仓',
     { confirmButtonText: '全部入库', cancelButtonText: '取消', type: 'warning' }
   );
@@ -415,7 +447,7 @@ async function batchCreateInbound() {
   try {
     await Promise.all(
       poolItems.value.map(item =>
-        createHubInboundRecord({ hubId: selectedHubId.value!, orderId: item.orderId, remark: '批量揽收入库' })
+        createHubInboundRecord({ hubId: selectedHubId.value!, orderId: item.orderId, remark: '批量待揽收入库' })
           .then(() => ok++)
           .catch(() => fail++)
       )
@@ -670,6 +702,7 @@ function batchTagType(s: string): any {
 .flow-card.orange { border-left: 3px solid #e6a23c; background: #fffbf2; }
 .flow-card.blue   { border-left: 3px solid #409eff; background: #f0f7ff; }
 .flow-card.green  { border-left: 3px solid #67c23a; background: #f0f9eb; }
+.flow-card.purple { border-left: 3px solid #9b59b6; background: #f8f0ff; }
 .flow-card.gray   { border-left: 3px solid #909399; background: #f8f8f8; }
 
 .card-top {

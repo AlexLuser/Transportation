@@ -3,7 +3,7 @@
     <el-card shadow="never">
       <template #header>
         <div class="card-header-row">
-          <span class="card-title">全国干线规划与批次</span>
+          <span class="card-title">全国干线 / 干线批次</span>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <el-date-picker
               v-model="llmAsOfDate"
@@ -30,7 +30,7 @@
         </div>
       </template>
 
-      <el-divider>干线批次与实单</el-divider>
+      <el-divider>干线批次（管理员统一发车 / 标记到达）</el-divider>
       <el-table
         :data="nationalBatches"
         size="small"
@@ -80,7 +80,7 @@
               type="warning" size="small"
               :disabled="!row.itemCount"
               @click="handleDepart(row.id)"
-            >发车</el-button>
+            >标记发车</el-button>
             <el-button
               v-if="row.status === 'DEPARTED'"
               type="success" size="small"
@@ -94,7 +94,7 @@
       </el-table>
       <el-empty
         v-if="!batchLoading && nationalBatches.length === 0"
-        description="尚无干线批次。请先执行「立即规划」或检查当日是否有可绑定的跨城待揽件订单。"
+        description="尚无干线批次。请先执行「立即规划」或检查当日是否有可绑定的跨城待揽收订单。"
       />
 
       <el-divider style="margin-top:20px">全国物流实时网络</el-divider>
@@ -299,7 +299,7 @@ async function loadTopology() {
 function trunkOrderStatusLabel(status: number | null | undefined) {
   if (status == null) return '—'
   const m: Record<number, string> = {
-    0: '待支付', 1: '待发货', 2: '待揽件', 3: '派送中', 4: '已完成', 5: '已取消'
+    0: '待支付', 1: '待发货', 2: '待揽收', 3: '派送中', 4: '已完成', 5: '已取消'
   }
   return m[status] ?? `状态${status}`
 }

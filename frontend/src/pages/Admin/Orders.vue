@@ -33,9 +33,9 @@
         <el-card shadow="never" class="table-card">
             <el-table :data="orders" v-loading="loading" stripe>
                 <el-table-column label="订单号" prop="orderNo" min-width="190" show-overflow-tooltip />
-                <el-table-column label="顾客编号" prop="customerId" width="90" align="center" />
+                <el-table-column label="收件用户编号" prop="customerId" width="110" align="center" />
                 <el-table-column label="商户编号" prop="shopId" width="90" align="center" />
-                <el-table-column label="商品金额" width="110">
+                <el-table-column label="申报价值" width="110">
                     <template #default="{ row }">
                         <span class="price-text">¥{{ row.productAmount }}</span>
                     </template>
@@ -90,9 +90,9 @@
             <div v-if="detailData" class="detail-body">
                 <el-descriptions title="基本信息" :column="2" border size="small">
                     <el-descriptions-item label="订单号" :span="2">{{ detailData.order.orderNo }}</el-descriptions-item>
-                    <el-descriptions-item label="顾客编号">{{ detailData.order.customerId }}</el-descriptions-item>
+                    <el-descriptions-item label="收件用户编号">{{ detailData.order.customerId }}</el-descriptions-item>
                     <el-descriptions-item label="商户编号">{{ detailData.order.shopId }}</el-descriptions-item>
-                    <el-descriptions-item label="商品金额">¥{{ detailData.order.productAmount }}</el-descriptions-item>
+                    <el-descriptions-item label="申报价值">¥{{ detailData.order.productAmount }}</el-descriptions-item>
                     <el-descriptions-item label="运费">¥{{ detailData.order.shippingFee ?? '0.00' }}</el-descriptions-item>
                     <el-descriptions-item label="总金额">¥{{ detailData.order.totalAmount }}</el-descriptions-item>
                     <el-descriptions-item label="订单状态">
@@ -108,9 +108,9 @@
                     </el-descriptions-item>
                 </el-descriptions>
                 <div class="items-section">
-                    <div class="section-title">商品明细</div>
+                    <div class="section-title">承运物明细</div>
                     <el-table :data="detailData.items" border size="small">
-                        <el-table-column label="商品名称" prop="productName" min-width="160" show-overflow-tooltip />
+                        <el-table-column label="承运物名称" prop="productName" min-width="160" show-overflow-tooltip />
                         <el-table-column label="单价" width="100">
                             <template #default="{ row }">¥{{ row.productPrice }}</template>
                         </el-table-column>
@@ -155,7 +155,7 @@
     const ORDER_STATUSES = [
         { value: 0, label: '待支付' },
         { value: 1, label: '待发货' },
-        { value: 2, label: '待揽件' },
+        { value: 2, label: '待揽收' },
         { value: 3, label: '派送中' },
         { value: 4, label: '已完成' },
         { value: 5, label: '已取消' },

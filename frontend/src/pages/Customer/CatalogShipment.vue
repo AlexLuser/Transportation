@@ -108,7 +108,7 @@
     const fetchProduct = async () => {
         const productId = route.query.productId;
         if (!productId) {
-            ElMessage.error('缺少货物参数，请从货物目录重新选择');
+            ElMessage.error('缺少承运物参数，请从承运物目录重新选择');
             router.replace('/sender/home/products');
             return;
         }
