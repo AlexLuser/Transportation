@@ -246,9 +246,9 @@
     }
 
     .address-group {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 16px;
     }
 
     .address-radio {
@@ -260,6 +260,7 @@
         cursor: pointer;
         transition: border-color .2s;
         height: auto;
+        margin-right: 0;
     }
 
     .address-radio:hover { border-color: #409eff; }
