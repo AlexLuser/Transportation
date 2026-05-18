@@ -39,10 +39,6 @@ build/
 node_modules/
 frontend/node_modules/
 
-### 论文项目（独立仓库管理） ###
-thesis-typst/
-thesis-latex/
-
 ### 大型二进制文件 ###
 *.osm.pbf
 shanghai-*.osm.pbf
@@ -50,7 +46,9 @@ shanghai-*.osm.pbf
 ### 参考论文（大文件，不纳入版本控制） ###
 论文修改稿*.pdf
 付苗毕设*.docx
-docs/参考论文提取文本*.txt
+docs/reference/论文修改稿*.pdf
+docs/reference/付苗毕设*.docx
+docs/thesis/参考论文提取文本*.txt
 
 ### macOS ###
 .DS_Store

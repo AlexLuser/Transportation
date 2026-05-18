@@ -11,20 +11,20 @@ SET CHARACTER SET utf8mb4;
 SET NAMES utf8mb4;
 
 -- ──────────────────────────────────────────
--- 新用户（user_id 6-9，追加到已有 1-5 之后）
+-- 新用户（user_id 20-23，追加到已有 1-5 之后）
 -- ──────────────────────────────────────────
 INSERT INTO `user` (`id`, `username`, `secret`, `permission`) VALUES
-(6, 'customer2', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- 李明
-(7, 'customer3', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- 王芳
-(8, 'driver2',   '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4),  -- 陈刚
-(9, 'driver3',   '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4);  -- 赵磊
+(20, 'customer2', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- 李明
+(21, 'customer3', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- 王芳
+(22, 'driver2',   '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4),  -- 陈刚
+(23, 'driver3',   '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4);  -- 赵磊
 
 -- 顾客信息
 INSERT INTO `customer_info`
   (`id`, `user_id`, `real_name`, `phone`, `email`, `gender`, `birthday`, `status`)
 VALUES
-(2, 6, '李明', '13900139001', 'liming@example.com',   1, '1988-08-20', 1),
-(3, 7, '王芳', '13600136002', 'wangfang@example.com', 2, '1992-03-12', 1);
+(2, 20, '李明', '13900139001', 'liming@example.com',   1, '1988-08-20', 1),
+(3, 21, '王芳', '13600136002', 'wangfang@example.com', 2, '1992-03-12', 1);
 
 -- 收货地址（addr_id 3-12，追加到已有 1-2 之后）
 INSERT INTO `customer_address`
@@ -48,9 +48,9 @@ INSERT INTO `driver_info`
   (`id`, `user_id`, `real_name`, `phone`, `email`, `id_card`, `gender`, `birthday`,
    `license_number`, `license_type`, `license_expire_date`, `status`)
 VALUES
-(2, 8, '陈刚', '13900139008', 'chengang@example.com',  '310104198805051234', 1, '1988-05-05',
+(2, 22, '陈刚', '13900139008', 'chengang@example.com',  '310104198805051234', 1, '1988-05-05',
  'SH0002345678901', 'C1', '2031-06-30', 1),
-(3, 9, '赵磊', '13600136009', 'zhaolei@example.com',   '310106199209091234', 1, '1992-09-09',
+(3, 23, '赵磊', '13600136009', 'zhaolei@example.com',   '310106199209091234', 1, '1992-09-09',
  'SH0003456789012', 'B2', '2029-12-31', 1);
 
 -- 车辆信息（vehicle_id 3-4）
@@ -5442,7 +5442,7 @@ VALUES
 --   慢速热点（4 个时段 × 6 个格点）: 3360 条
 -- 新增路线: 30 条（route_id 2-31）
 -- 新增订单: 30 条（order_id 3-32）
--- 新增用户: 4 条（user_id 6-9）
+-- 新增用户: 4 条（user_id 20-23）
 -- 高峰时段 boost 速度: 15-28 km/h（小时 [7, 8, 17, 18, 19]）
 -- 平峰时段 boost 速度: 35-45 km/h（其余小时）
 -- ══════════════════════════════════════════════════════════
