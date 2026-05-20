@@ -50,8 +50,9 @@ public class AStarRouteStrategy implements RouteStrategy {
 
     @Override
     public RouteResultDTO plan(double startLat, double startLon,
-                               double endLat,   double endLon) {
-        // 标准 A*（epsilon=1.0，保证最优路径）
+                               double endLat,   double endLon,
+                               java.time.LocalDateTime plannedTime) {
+        // 纯 A* 策略不使用历史时间，plannedTime 参数由 LLM 策略消费
         return planWithEpsilon(startLat, startLon, endLat, endLon, 1.0);
     }
 

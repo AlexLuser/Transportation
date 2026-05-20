@@ -16,6 +16,10 @@
                         <el-icon><Van /></el-icon>
                         <span>库存管理</span>
                     </el-menu-item>
+                    <el-menu-item index="/shop/home/warehouse">
+                        <el-icon><OfficeBuilding /></el-icon>
+                        <span>仓储管理</span>
+                    </el-menu-item>
                     <el-menu-item index="/shop/home/profile">
                         <el-icon><User /></el-icon>
                         <span>商铺信息</span>
@@ -43,7 +47,7 @@
     import { logout } from '@/api/auth';
     import { router } from '@/router';
     import { useUserStore } from '@/stores/userStore';
-    import { ShoppingBag, List, User, Van } from '@element-plus/icons-vue';
+    import { ShoppingBag, List, User, Van, OfficeBuilding } from '@element-plus/icons-vue';
 
     const userStore = useUserStore();
 

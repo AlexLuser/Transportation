@@ -93,5 +93,21 @@ public interface OrderService extends IService<Order> {
      * @return 订单，不存在返回 null
      */
     Order getOrderByNo(String orderNo);
+
+    /**
+     * 顾客签收订单（待签收:6 → 已完成:4）
+     * @param orderId    订单ID
+     * @param customerId 当前顾客ID（用于鉴权）
+     */
+    boolean signOrder(Long orderId, Long customerId);
+
+    /**
+     * 商户发货（含仓库选择 + Hub 分配）
+     * 1. 校验订单归属商户且状态=1
+     * 2. 调 logistics-service 分配 originHub/destHub
+     * 3. 更新 order_info 仓库/Hub 字段，状态→2
+     * 4. 发 AddToPoolMessage（含 Hub 信息）
+     */
+    boolean shipOrder(Long orderId, Long shopId, Long warehouseId);
 }
 

@@ -12,6 +12,9 @@
                 <el-form-item>
                     <el-button type="primary" @click="handleLogin" style="width: 100%;" :loading="loading">登录</el-button>
                 </el-form-item>
+                <el-form-item>
+                    <el-button @click="router.push('/register')" style="width: 100%;">注册新账号</el-button>
+                </el-form-item>
             </el-form>
         </el-card>
     </div>

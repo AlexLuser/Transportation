@@ -31,5 +31,29 @@ public class RouteDetailDTO {
 
     /** 配送员联系电话（从 driver-service 获取，未绑定时为 null） */
     private String driverPhone;
+
+    /**
+     * 多停靠路线中，当前订单的停靠序号（从 1 开始）。
+     * 单停靠路线或旧体系路线时为 null。
+     */
+    private Integer stopSequence;
+
+    /**
+     * 多停靠路线的总停靠数。
+     * 单停靠或旧体系时为 null。
+     */
+    private Integer totalStops;
+
+    /**
+     * 当前订单在多停靠路线中的具体收货地址。
+     * 与 route.endAddress 区分（route.endAddress 是最后一站，非本订单地址）。
+     */
+    private String orderEndAddress;
+
+    /** 当前订单收货坐标（纬度） */
+    private Double orderEndLat;
+
+    /** 当前订单收货坐标（经度） */
+    private Double orderEndLng;
 }
 

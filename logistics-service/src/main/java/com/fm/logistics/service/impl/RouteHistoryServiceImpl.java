@@ -29,14 +29,15 @@ public class RouteHistoryServiceImpl implements RouteHistoryService {
 
     @Override
     public HistoryContextDTO buildContext(double startLat, double startLon,
-                                          double endLat, double endLon) {
-        LocalDateTime now = LocalDateTime.now();
-        int currentHour = now.getHour();
+                                          double endLat, double endLon,
+                                          LocalDateTime plannedTime) {
+        LocalDateTime ref = (plannedTime != null) ? plannedTime : LocalDateTime.now();
+        int currentHour = ref.getHour();
 
         HistoryContextDTO ctx = new HistoryContextDTO();
         ctx.setCurrentHour(currentHour);
-        ctx.setDayOfWeek(toChinese(now.getDayOfWeek()));
-        ctx.setTimePeriod(detectTimePeriod(currentHour, now.getMinute()));
+        ctx.setDayOfWeek(toChinese(ref.getDayOfWeek()));
+        ctx.setTimePeriod(detectTimePeriod(currentHour, ref.getMinute()));
 
         // ── 1. 行驶速度统计（logistics_track，过去30天） ──────────────────
         List<Map<String, Object>> speedStats = querySpeed();

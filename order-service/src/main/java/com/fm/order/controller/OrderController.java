@@ -6,6 +6,7 @@ import com.fm.common.result.Result;
 import com.fm.common.result.ResultCode;
 import com.fm.order.dto.CreateOrderRequestDTO;
 import com.fm.order.dto.OrderDetailDTO;
+import com.fm.order.dto.ShipOrderRequestDTO;
 import com.fm.order.entity.Order;
 import com.fm.order.feign.CustomerFeignClient;
 import com.fm.order.feign.ShopFeignClient;
@@ -348,6 +349,52 @@ public class OrderController {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权支付其他顾客的订单");
         }
         boolean success = orderService.payOrder(id);
+        return Result.success(success);
+    }
+
+    /**
+     * 商户发货（含仓库选择）
+     * POST /orders/{id}/ship
+     * 商户在发货弹窗中选择发货仓库后调用此接口
+     */
+    @Operation(summary = "商户发货", description = "商户选择仓库发货，系统自动分配Hub并判断是否跨城")
+    @PostMapping("/{id}/ship")
+    public Result<Boolean> shipOrder(
+            @RequestHeader(value = "userId", required = false) String userIdHeader,
+            @RequestHeader(value = "roleCode", required = false) String roleCode,
+            @PathVariable Long id,
+            @RequestBody ShipOrderRequestDTO req) {
+        if (!StringUtils.hasText(userIdHeader)) {
+            throw new BusinessException(ResultCode.UNAUTHORIZED);
+        }
+        if (!"shop".equals(roleCode)) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "只有商户可以发货");
+        }
+        Long userId = Long.parseLong(userIdHeader);
+        Long shopId = resolveShopId(userId);
+        boolean success = orderService.shipOrder(id, shopId, req.getWarehouseId());
+        return Result.success(success);
+    }
+
+    /**
+     * 顾客签收订单（待签收:6 → 已完成:4）
+     * PUT /orders/{id}/sign
+     */
+    @Operation(summary = "顾客签收订单", description = "订单处于待签收状态时，顾客确认签收，订单变为已完成")
+    @PutMapping("/{id}/sign")
+    public Result<Boolean> signOrder(
+            @RequestHeader(value = "userId", required = false) String userIdHeader,
+            @RequestHeader(value = "roleCode", required = false) String roleCode,
+            @PathVariable Long id) {
+        if (!StringUtils.hasText(userIdHeader)) {
+            throw new BusinessException(ResultCode.UNAUTHORIZED);
+        }
+        if (!"customer".equals(roleCode)) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "只有顾客可以签收订单");
+        }
+        Long userId = Long.parseLong(userIdHeader);
+        Long customerId = resolveCustomerId(userId);
+        boolean success = orderService.signOrder(id, customerId);
         return Result.success(success);
     }
 

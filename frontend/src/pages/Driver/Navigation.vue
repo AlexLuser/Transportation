@@ -5,18 +5,18 @@
                 <div class="card-head">
                     <span class="title">配送路线</span>
                     <div v-if="inProgress.length" class="head-tools">
-                        <span class="hint">数据来自物流服务</span>
+                        <span class="hint">路线由系统实时生成</span>
                         <el-select
-                            v-model="selectedOrderId"
-                            placeholder="选择进行中的订单"
+                            v-model="selectedDeliveryId"
+                            placeholder="选择进行中的配送"
                             style="width: 220px"
                             @change="loadRoute"
                         >
                             <el-option
                                 v-for="d in inProgress"
                                 :key="d.id"
-                                :label="`订单 #${d.orderId}`"
-                                :value="d.orderId"
+                                :label="d.segmentType === 1 ? `干线任务 #${d.id}` : d.orderId ? `末端配送 #${d.orderId}` : `末端任务 #${d.id}`"
+                                :value="d.id"
                             />
                         </el-select>
                     </div>
@@ -27,7 +27,7 @@
                 <el-button type="primary" @click="$router.push('/driver/home/deliveries')">去配送管理</el-button>
             </el-empty>
 
-            <template v-else-if="selectedOrderId">
+            <template v-else-if="selectedDeliveryId">
                 <el-alert
                     v-if="routeError"
                     :title="routeError"
@@ -37,20 +37,33 @@
                 />
                 <div v-loading="loadingRoute">
                     <template v-if="routeDetail">
+                        <!-- 多停靠提示 -->
+                        <el-alert
+                            v-if="routeDetail.totalStops > 1"
+                            type="info" show-icon :closable="false"
+                            style="margin-bottom:12px"
+                        >
+                            <template #title>
+                                本次派送共 {{ routeDetail.totalStops }} 个停靠点，您正在配送第 {{ routeDetail.stopSequence }} 站的包裹
+                            </template>
+                        </el-alert>
+
                         <el-descriptions :column="2" border size="small" class="mb-16">
                             <el-descriptions-item label="物流单号">{{ routeDetail.route?.routeNo ?? '-' }}</el-descriptions-item>
                             <el-descriptions-item label="路线状态">{{ routeDetail.statusDesc ?? '-' }}</el-descriptions-item>
                             <el-descriptions-item label="出发地" :span="2">{{ routeDetail.route?.startAddress ?? '-' }}</el-descriptions-item>
-                            <el-descriptions-item label="目的地" :span="2">{{ routeDetail.route?.endAddress ?? '-' }}</el-descriptions-item>
+                            <el-descriptions-item label="本单收货地" :span="2">
+                                {{ routeDetail.orderEndAddress ?? routeDetail.route?.endAddress ?? '-' }}
+                            </el-descriptions-item>
                             <el-descriptions-item v-if="routeDetail.route?.estimatedArrivalTime" label="预计到达">
                                 {{ formatDate(routeDetail.route.estimatedArrivalTime) }}
                             </el-descriptions-item>
                         </el-descriptions>
 
-                        <!-- 与顾客端一致：Leaflet + OSM，规划线来自 logistics 存库的 GeoJSON（plannedRoute） -->
+                        <!-- 司机视图：展示完整路线（含全部停靠点标记） -->
                         <div class="section-title">路线地图</div>
                         <RouteMap
-                            :key="selectedOrderId"
+                            :key="selectedDeliveryId"
                             :start-lat="routeDetail.route?.startLatitude"
                             :start-lng="routeDetail.route?.startLongitude"
                             :end-lat="routeDetail.route?.endLatitude"
@@ -61,6 +74,7 @@
                             :recent-tracks="routeDetail.recentTracks"
                             :start-label="routeDetail.route?.startAddress"
                             :end-label="routeDetail.route?.endAddress"
+                            :extra-end-points="waypointMarkers"
                         />
 
                         <div v-if="nodes.length" class="section-title">途径节点</div>
@@ -86,14 +100,15 @@
     import { ref, computed, onMounted } from 'vue';
     import { useRoute } from 'vue-router';
     import { getInProgressDeliveries } from '@/api/driver';
-    import { getRouteByOrderId } from '@/api/logistics';
+    import { getRouteByOrderId, getRouteByRouteId } from '@/api/logistics';
     import RouteMap from '@/components/RouteMap.vue';
 
     const route = useRoute();
     const loadingList = ref(false);
     const loadingRoute = ref(false);
     const inProgress = ref<any[]>([]);
-    const selectedOrderId = ref<number | null>(null);
+    /** 以 delivery.id 作为 select 的唯一标识，避免干线任务 orderId=null 的歧义 */
+    const selectedDeliveryId = ref<number | null>(null);
     const routeDetail = ref<any>(null);
     const routeError = ref('');
 
@@ -103,16 +118,46 @@
         return [...list].sort((a: any, b: any) => (a.sequenceNo ?? 0) - (b.sequenceNo ?? 0));
     });
 
+    /** 从 waypoints JSON 解析停靠点，作为地图 extraEndPoints 展示（司机需看全程所有停靠点） */
+    const waypointMarkers = computed<{ lat: number; lng: number; label: string }[]>(() => {
+        const wps = routeDetail.value?.route?.waypoints;
+        if (!wps) return [];
+        try {
+            const parsed = JSON.parse(wps) as Array<{
+                seq: number; lat?: number; lng?: number;
+                address?: string; receiverName?: string;
+            }>;
+            return parsed
+                .filter(wp => wp.lat && wp.lng)
+                .map(wp => ({
+                    lat: wp.lat as number,
+                    lng: wp.lng as number,
+                    label: `第 ${wp.seq} 站 · ${wp.receiverName ?? ''} ${wp.address ?? ''}`,
+                }));
+        } catch {
+            return [];
+        }
+    });
+
     const formatDate = (d: string | null | undefined) =>
         d ? new Date(d).toLocaleString('zh-CN', { hour12: false }) : '-';
 
     const loadRoute = async () => {
-        if (!selectedOrderId.value) return;
+        if (!selectedDeliveryId.value) return;
+        const delivery = inProgress.value.find((d: any) => d.id === selectedDeliveryId.value);
+        if (!delivery) return;
         routeError.value = '';
         routeDetail.value = null;
         loadingRoute.value = true;
         try {
-            const res = await getRouteByOrderId(selectedOrderId.value);
+            let res;
+            if (delivery.orderId) {
+                // 普通末端路线：按订单 ID 查（支持 stopSequence 等扩展字段）
+                res = await getRouteByOrderId(delivery.orderId);
+            } else {
+                // 干线任务 / 多停靠末端任务：orderId=null，改用 routeId 直接查
+                res = await getRouteByRouteId(delivery.routeId);
+            }
             routeDetail.value = res.data ?? null;
         } catch (e: any) {
             routeError.value = typeof e === 'string' ? e : '加载路线失败';
@@ -126,14 +171,21 @@
         try {
             const res = await getInProgressDeliveries();
             inProgress.value = res.data ?? [];
-            const q = route.query.orderId;
-            const qid = q != null && q !== '' ? Number(q) : NaN;
-            if (Number.isFinite(qid) && inProgress.value.some((d: any) => d.orderId === qid)) {
-                selectedOrderId.value = qid;
-            } else if (inProgress.value.length) {
-                selectedOrderId.value = inProgress.value[0].orderId;
+            // 优先按 deliveryId 参数预选（Delivery.vue 传过来的）
+            const qDid = route.query.deliveryId;
+            const qOid = route.query.orderId;
+            const dIdNum = qDid != null && qDid !== '' ? Number(qDid) : NaN;
+            const oIdNum = qOid != null && qOid !== '' ? Number(qOid) : NaN;
+            if (Number.isFinite(dIdNum) && inProgress.value.some((d: any) => d.id === dIdNum)) {
+                selectedDeliveryId.value = dIdNum;
+            } else if (Number.isFinite(oIdNum)) {
+                const match = inProgress.value.find((d: any) => d.orderId === oIdNum);
+                if (match) selectedDeliveryId.value = match.id;
             }
-            if (selectedOrderId.value) await loadRoute();
+            if (!selectedDeliveryId.value && inProgress.value.length) {
+                selectedDeliveryId.value = inProgress.value[0].id;
+            }
+            if (selectedDeliveryId.value) await loadRoute();
         } finally {
             loadingList.value = false;
         }

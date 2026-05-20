@@ -8,6 +8,32 @@ spring:
     nacos:
       discovery:
         server-addr: localhost:8848  # Nacos地址
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    virtual-host: /
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000ms
+          multiplier: 2.0
+          max-interval: 10000ms
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+    timeout: 3000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 1
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
@@ -42,6 +68,9 @@ deepseek:
   api-url: https://api.deepseek.com/v1/chat/completions
   api-key: sk-9f58d125f461401896f6c4b233d9774d   # 请替换为实际 API Key
   model: deepseek-chat
+  # 费用校准等请求 max_tokens 较大时，服务端生成可能超过 15s，需加大读取超时（毫秒）
+  connect-timeout-ms: 10000
+  read-timeout-ms: 180000
 
 # 路径规划策略选择
 # 可选值：
@@ -49,4 +78,14 @@ deepseek:
 #   LLM_JUDGE    - 方案A：生成3条候选 + LLM裁判选最优 + 修正时间估算
 #   LLM_WAYPOINT - 方案B：LLM根据历史数据决定绕路路点 + A*分段执行
 routing:
-  strategy: LLM_WAYPOINT
+  strategy: A_STAR
+
+# MCMF 全国物流网络流量规划配置
+mcmf:
+  # 触发模式：manual=手动触发（演示默认）/ auto=自动定时触发
+  trigger-mode: manual
+  schedule:
+    # 是否开启定时自动触发（trigger-mode=auto 时建议设为 true）
+    enabled: false
+    # 定时触发时间（cron 表达式，默认每天早6点）
+    cron: "0 0 6 * * ?"

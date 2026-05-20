@@ -10,6 +10,9 @@ import com.fm.shop.entity.Product;
 import com.fm.shop.mapper.ProductMapper;
 import com.fm.shop.service.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import java.util.List;
@@ -24,6 +27,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     private ProductMapper productMapper;
 
     @Override
+    @Cacheable(value = "product", key = "#productId", unless = "#result == null")
     public Product getProductById(Long productId) {
         return productMapper.selectById(productId);
     }
@@ -56,25 +60,33 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     }
 
     @Override
+    @Caching(evict = {
+        @CacheEvict(value = "product",      key = "#product.id", condition = "#product.id != null"),
+        @CacheEvict(value = "mallProducts", allEntries = true)
+    })
     public Product saveOrUpdateProduct(Product product) {
         if (product.getId() == null) {
-            // 新增商品
             productMapper.insert(product);
         } else {
-            // 更新商品
             productMapper.updateById(product);
         }
         return product;
     }
 
     @Override
+    @Caching(evict = {
+        @CacheEvict(value = "product",      key = "#productId"),
+        @CacheEvict(value = "mallProducts", allEntries = true)
+    })
     public boolean deleteProduct(Long productId) {
-        // 注意：删除商品前，应该先删除关联的库存信息
-        // 这里只删除商品信息，库存的级联删除需要在业务层处理
         return productMapper.deleteById(productId) > 0;
     }
 
     @Override
+    @Caching(evict = {
+        @CacheEvict(value = "product",      key = "#productId"),
+        @CacheEvict(value = "mallProducts", allEntries = true)
+    })
     public boolean updateProductStatus(Long productId, Integer status) {
         LambdaUpdateWrapper<Product> wrapper = new LambdaUpdateWrapper<>();
         wrapper.eq(Product::getId, productId).set(Product::getStatus, status);
@@ -104,6 +116,8 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     }
 
     @Override
+    @Cacheable(value = "mallProducts",
+               key = "#current + '-' + #size + '-' + #categoryId + '-' + #keyword + '-' + #sortField + '-' + #sortOrder")
     public PageResult<Product> getAllOnSaleProductsPage(Long current, Long size, Long categoryId, String keyword, String sortField, String sortOrder) {
         // 创建分页对象
         Page<Product> page = new Page<>(current, size);

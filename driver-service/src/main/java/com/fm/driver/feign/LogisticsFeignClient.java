@@ -4,6 +4,7 @@ import com.fm.common.result.Result;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -48,6 +49,35 @@ public interface LogisticsFeignClient {
             @PathVariable("routeId") Long routeId,
             @RequestBody Map<String, Integer> body,
             @RequestHeader("userId") String userId,
+            @RequestHeader("roleCode") String roleCode);
+
+    /**
+     * 获取末端路线下所有停靠点（含 itemStatus）
+     */
+    @GetMapping("/api/logistics/batches/routes/{routeId}/stops")
+    Result<List<Map<String, Object>>> getRouteStops(
+            @PathVariable("routeId") Long routeId,
+            @RequestHeader("userId") String userId);
+
+    /**
+     * 标记某停靠点（订单）已送达
+     * 返回 {"allDone": true/false}
+     */
+    @PutMapping("/api/logistics/batches/routes/{routeId}/stops/{orderId}/complete")
+    Result<Map<String, Object>> completeStop(
+            @PathVariable("routeId") Long routeId,
+            @PathVariable("orderId") Long orderId,
+            @RequestHeader("userId") String userId);
+
+    /**
+     * 管理员预分配末端路线司机（服务间内部调用，传 roleCode="admin" 通过鉴权）
+     * 请求体：{"driverId": x}
+     * 将 driverId 写入 logistics_route，Hub 到达激活时自动转为已接单配送记录
+     */
+    @PutMapping("/api/logistics/routes/{routeId}/pre-assign")
+    Result<Void> preAssignDriver(
+            @PathVariable("routeId") Long routeId,
+            @RequestBody Map<String, Long> body,
             @RequestHeader("roleCode") String roleCode);
 }
 

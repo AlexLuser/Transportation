@@ -18,6 +18,14 @@
                     <el-option label="待审核" :value="2" />
                 </el-select>
                 <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
+
+                <!-- 商品数量统计 -->
+                <div class="stat-tags">
+                    <el-tag type="info" size="small">全部 {{ statsTotal }}</el-tag>
+                    <el-tag type="success" size="small">上架 {{ statsOnSale }}</el-tag>
+                    <el-tag type="info" effect="plain" size="small">下架 {{ statsOffSale }}</el-tag>
+                    <el-tag type="warning" size="small">待审核 {{ statsPending }}</el-tag>
+                </div>
             </div>
             <el-button type="success" :icon="Plus" @click="openAddDialog">新增商品</el-button>
         </div>
@@ -259,8 +267,30 @@
     const pageSize = ref(10);
     const total = ref(0);
 
+    // 各状态商品数量统计
+    const statsTotal   = ref(0);
+    const statsOnSale  = ref(0);  // status=1 上架
+    const statsOffSale = ref(0);  // status=0 下架
+    const statsPending = ref(0);  // status=2 待审核
+
     // 仓库 id -> 名称 映射（详情弹窗用）
     const warehouseMap = ref<Record<number, string>>({});
+
+    /** 加载各状态商品数量（全量，不受当前筛选条件影响） */
+    const loadStats = async () => {
+        try {
+            const [all, onSale, offSale, pending] = await Promise.all([
+                getProducts({ current: 1, size: 1 }),
+                getProducts({ current: 1, size: 1, status: 1 }),
+                getProducts({ current: 1, size: 1, status: 0 }),
+                getProducts({ current: 1, size: 1, status: 2 }),
+            ]);
+            statsTotal.value   = all.data?.total   ?? 0;
+            statsOnSale.value  = onSale.data?.total  ?? 0;
+            statsOffSale.value = offSale.data?.total ?? 0;
+            statsPending.value = pending.data?.total ?? 0;
+        } catch { /* 非致命 */ }
+    };
 
     const fetchProducts = async () => {
         loading.value = true;
@@ -269,7 +299,9 @@
                 current: currentPage.value,
                 size: pageSize.value,
                 keyword: keyword.value || undefined,
-                ...(statusFilter.value !== null ? { sortField: 'createTime', sortOrder: 'desc' } : {}),
+                status: statusFilter.value !== null ? statusFilter.value : undefined,
+                sortField: 'createTime',
+                sortOrder: 'desc',
             });
             products.value = res.data?.records ?? [];
             total.value = res.data?.total ?? 0;
@@ -281,6 +313,7 @@
     const handleSearch = () => {
         currentPage.value = 1;
         fetchProducts();
+        loadStats();
     };
 
     // ==================== 仓库数据 ====================
@@ -471,6 +504,7 @@
     onMounted(() => {
         fetchProducts();
         loadWarehouses();
+        loadStats();
     });
 </script>
 
@@ -500,6 +534,7 @@
 
     .search-input { width: 260px; }
     .status-select { width: 120px; }
+    .stat-tags { display: flex; gap: 6px; align-items: center; }
 
     /* 表格卡片 */
     .table-card { border-radius: 8px; }

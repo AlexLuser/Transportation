@@ -1,3 +1,6 @@
+SET NAMES utf8mb4;
+SET CHARACTER SET utf8mb4;
+
 -- ============================================================
 -- 物流调度服务数据库表
 -- 模块：路径规划
@@ -20,29 +23,41 @@ DROP TABLE IF EXISTS `logistics_route`;
 CREATE TABLE `logistics_route` (
   `id`                    BIGINT       NOT NULL AUTO_INCREMENT COMMENT '路线ID（主键）',
   `route_no`              VARCHAR(30)  NOT NULL UNIQUE COMMENT '路线编号（LR+yyyyMMddHHmmss+4位随机）',
-  `order_id`              BIGINT       NOT NULL UNIQUE COMMENT '关联订单ID（一个订单只能有一条路线）',
+  `order_id`              BIGINT       DEFAULT NULL COMMENT '关联订单ID（单订单路线；多停靠末端路线为NULL）',
   `delivery_id`           BIGINT       DEFAULT NULL COMMENT '关联配送记录ID（接单后绑定）',
   `driver_id`             BIGINT       DEFAULT NULL COMMENT '运输员ID（接单后绑定）',
   `warehouse_id`          BIGINT       DEFAULT NULL COMMENT '出发仓库ID',
 
-  -- 出发地信息（仓库）
-  `start_address`         VARCHAR(300) NOT NULL COMMENT '出发地址（仓库地址快照）',
+  -- Hub-and-Spoke 扩展字段
+  `batch_id`              BIGINT       DEFAULT NULL COMMENT '所属批次ID（null=单订单模式）',
+  `segment_type`          TINYINT      NOT NULL DEFAULT 0
+                          COMMENT '路线段类型：0=独立单订单，1=干线（仓库→Hub），2=末端（Hub→客户）',
+  `hub_id`                BIGINT       DEFAULT NULL COMMENT '中转站ID（干线=目标Hub；末端=起点Hub）',
+
+  -- 多停靠末端路线分组字段
+  `group_index`           TINYINT      DEFAULT NULL COMMENT '批次内末端分组编号（0,1,2...）',
+  `stop_count`            INT          NOT NULL DEFAULT 1 COMMENT '停靠点数（1=单订单，>1=多停靠末端路线）',
+  `waypoints`             JSON         DEFAULT NULL COMMENT '多停靠点列表：[{seq,orderId,address,lat,lng,...}]',
+
+  -- 出发地信息
+  `start_address`         VARCHAR(300) NOT NULL COMMENT '出发地址快照',
   `start_lat`             DOUBLE       DEFAULT NULL COMMENT '出发地纬度',
   `start_lng`             DOUBLE       DEFAULT NULL COMMENT '出发地经度',
 
-  -- 目的地信息（收货地址）
-  `end_address`           VARCHAR(300) NOT NULL COMMENT '目的地址（收货地址快照）',
+  -- 目的地信息（多停靠末端路线 = 最后一停靠点）
+  `end_address`           VARCHAR(300) NOT NULL COMMENT '目的地址（多停靠=最后停靠点）',
   `end_lat`               DOUBLE       DEFAULT NULL COMMENT '目的地纬度',
   `end_lng`               DOUBLE       DEFAULT NULL COMMENT '目的地经度',
 
-  -- 实时位置（运输中持续更新）
+  -- 实时位置
   `current_lat`           DOUBLE       DEFAULT NULL COMMENT '当前位置纬度',
   `current_lng`           DOUBLE       DEFAULT NULL COMMENT '当前位置经度',
-  `current_address`       VARCHAR(300) DEFAULT NULL COMMENT '当前位置描述（逆地理编码结果）',
+  `current_address`       VARCHAR(300) DEFAULT NULL COMMENT '当前位置描述',
   `last_track_time`       DATETIME     DEFAULT NULL COMMENT '最后一次位置更新时间',
 
-  -- 状态机：0=待出发，1=运输中，2=已送达，3=异常
-  `route_status`          TINYINT      NOT NULL DEFAULT 0 COMMENT '路线状态：0=待出发，1=运输中，2=已送达，3=异常',
+  -- 状态机：-1=待激活，0=待出发，1=运输中，2=已送达，3=异常
+  `route_status`          TINYINT      NOT NULL DEFAULT 0
+                          COMMENT '路线状态：-1=待激活(末端路线)，0=待出发，1=运输中，2=已送达，3=异常',
 
   -- 时间预估
   `estimated_arrival_time` DATETIME   DEFAULT NULL COMMENT '预计到达时间',
@@ -51,9 +66,9 @@ CREATE TABLE `logistics_route` (
   -- 路线数据（GeoJSON）
   `planned_route`         LONGTEXT     DEFAULT NULL COMMENT '计划路线（GeoJSON LineString，由 GraphHopper 生成）',
 
-  -- 收货人信息快照
-  `receiver_name`         VARCHAR(50)  DEFAULT NULL COMMENT '收货人姓名',
-  `receiver_phone`        VARCHAR(20)  DEFAULT NULL COMMENT '收货人电话',
+  -- 收货人信息快照（单订单路线；多停靠末端路线为NULL，详见 waypoints/batch_item）
+  `receiver_name`         VARCHAR(50)  DEFAULT NULL COMMENT '收货人姓名（单订单路线）',
+  `receiver_phone`        VARCHAR(20)  DEFAULT NULL COMMENT '收货人电话（单订单路线）',
   `remark`                VARCHAR(500) DEFAULT NULL COMMENT '备注',
 
   `create_time`           DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -61,12 +76,14 @@ CREATE TABLE `logistics_route` (
 
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_route_no`   (`route_no`),
-  UNIQUE KEY `uk_order_id`   (`order_id`),
+  INDEX `idx_order_id`       (`order_id`),
   INDEX `idx_driver_id`      (`driver_id`),
   INDEX `idx_warehouse_id`   (`warehouse_id`),
   INDEX `idx_route_status`   (`route_status`),
+  INDEX `idx_batch_id`       (`batch_id`),
+  INDEX `idx_segment_type`   (`segment_type`),
   INDEX `idx_create_time`    (`create_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='物流路线表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='物流路线表（单订单/干线/多停靠末端路线共用）';
 
 
 -- ============================================================
@@ -76,7 +93,7 @@ CREATE TABLE `logistics_route` (
 CREATE TABLE `logistics_node` (
   `id`                    BIGINT       NOT NULL AUTO_INCREMENT COMMENT '节点ID',
   `route_id`              BIGINT       NOT NULL COMMENT '所属路线ID',
-  `node_type`             TINYINT      NOT NULL COMMENT '节点类型：0=出发点，1=途经点，2=目的地',
+  `node_type`             TINYINT      NOT NULL COMMENT '节点类型：0=出发点，1=途经点，2=目的地，3=中转站（Hub）',
   `node_name`             VARCHAR(100) NOT NULL COMMENT '节点名称',
   `node_address`          VARCHAR(300) DEFAULT NULL COMMENT '节点地址',
   `latitude`              DOUBLE       DEFAULT NULL COMMENT '节点纬度',
@@ -117,6 +134,98 @@ CREATE TABLE `logistics_track` (
   INDEX `idx_track_time`    (`track_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='实时轨迹点表'
   ROW_FORMAT=COMPRESSED;
+
+
+-- ============================================================
+-- 4. 物流中转站表（Hub-and-Spoke）
+-- ============================================================
+DROP TABLE IF EXISTS `logistics_hub`;
+CREATE TABLE `logistics_hub` (
+  `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT 'Hub ID',
+  `hub_name`    VARCHAR(100) NOT NULL                COMMENT '中转站名称',
+  `address`     VARCHAR(300) NOT NULL                COMMENT '中转站地址',
+  `latitude`    DOUBLE       NOT NULL                COMMENT '纬度',
+  `longitude`   DOUBLE       NOT NULL                COMMENT '经度',
+  `region`      VARCHAR(50)  DEFAULT NULL            COMMENT '所属区域（如"浦东"）',
+  `capacity`    INT          DEFAULT NULL            COMMENT '日处理批次上限',
+  `status`      TINYINT      NOT NULL DEFAULT 0      COMMENT '状态：0=正常，1=维护，2=停用',
+  `create_time` DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  `update_time` DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='物流中转站';
+
+
+-- ============================================================
+-- 5. 配送批次表（Hub-and-Spoke）
+-- ============================================================
+DROP TABLE IF EXISTS `logistics_batch_item`;
+DROP TABLE IF EXISTS `logistics_batch`;
+CREATE TABLE `logistics_batch` (
+  `id`             BIGINT      NOT NULL AUTO_INCREMENT COMMENT '批次ID',
+  `batch_no`       VARCHAR(30) NOT NULL UNIQUE       COMMENT '批次编号（LB+时间+随机）',
+  `warehouse_id`   BIGINT      DEFAULT NULL          COMMENT '发货仓库ID',
+  `hub_id`         BIGINT      DEFAULT NULL          COMMENT '中转站ID（useHub=1时有效）',
+  `trunk_route_id` BIGINT      DEFAULT NULL          COMMENT '干线路线ID',
+  `batch_status`   TINYINT     NOT NULL DEFAULT 0
+                   COMMENT '批次状态：0=待出发，1=干线运输中，2=已到中转站，3=末端派送中，4=全部完成',
+  `total_orders`   INT         NOT NULL DEFAULT 0    COMMENT '批次订单总数',
+  `use_hub`        TINYINT     NOT NULL DEFAULT 1    COMMENT '是否Hub模式：1=是，0=否（直送）',
+  `vrp_algorithm`  VARCHAR(50) DEFAULT NULL          COMMENT '使用的VRP算法',
+  `total_distance` DOUBLE      DEFAULT NULL          COMMENT 'VRP规划总里程（米）',
+  `create_time`    DATETIME    DEFAULT CURRENT_TIMESTAMP,
+  `update_time`    DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_status` (`batch_status`),
+  INDEX `idx_warehouse` (`warehouse_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='配送批次';
+
+CREATE TABLE `logistics_batch_item` (
+  `id`             BIGINT   NOT NULL AUTO_INCREMENT,
+  `batch_id`       BIGINT   NOT NULL          COMMENT '所属批次ID',
+  `order_id`       BIGINT   NOT NULL          COMMENT '订单ID',
+  `route_id`       BIGINT   DEFAULT NULL      COMMENT '末端路线ID（单停靠=独立route；多停靠=同组共享route）',
+  `visit_sequence` INT      NOT NULL DEFAULT 0 COMMENT '批次内全局VRP访问顺序（从1开始）',
+  `stop_sequence`  INT      DEFAULT NULL      COMMENT '组内停靠顺序（多停靠时有效，从1开始）',
+  `end_lat`        DOUBLE   DEFAULT NULL      COMMENT '目的地纬度（快照）',
+  `end_lng`        DOUBLE   DEFAULT NULL      COMMENT '目的地经度（快照）',
+  `end_address`    VARCHAR(300) DEFAULT NULL  COMMENT '目的地地址（快照）',
+  `receiver_name`  VARCHAR(50)  DEFAULT NULL  COMMENT '收货人姓名（快照）',
+  `receiver_phone` VARCHAR(20)  DEFAULT NULL  COMMENT '收货人电话（快照）',
+  `item_status`    TINYINT  NOT NULL DEFAULT 0 COMMENT '0=待激活，1=末端派送中，2=已送达',
+  `create_time`    DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `update_time`    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  INDEX `idx_batch_id`  (`batch_id`),
+  INDEX `idx_order_id`  (`order_id`),
+  INDEX `idx_route_id`  (`route_id`),
+  INDEX `idx_sequence`  (`batch_id`, `visit_sequence`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='批次订单明细（每行=一个订单/末端停靠点）';
+
+
+-- ============================================================
+-- 6. 订单调度池（智能调度系统）
+-- ============================================================
+DROP TABLE IF EXISTS `dispatch_pool`;
+CREATE TABLE `dispatch_pool` (
+  `id`             BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `order_id`       BIGINT       NOT NULL                COMMENT '订单ID',
+  `shop_id`        BIGINT       NOT NULL                COMMENT '商铺ID',
+  `warehouse_id`   BIGINT       NOT NULL                COMMENT '发货仓库ID',
+  `end_address`    VARCHAR(500) NOT NULL                COMMENT '收货地址全文',
+  `end_lat`        DOUBLE       NULL                    COMMENT '收货地址纬度',
+  `end_lng`        DOUBLE       NULL                    COMMENT '收货地址经度',
+  `receiver_name`  VARCHAR(100) NOT NULL DEFAULT ''     COMMENT '收货人',
+  `receiver_phone` VARCHAR(30)  NOT NULL DEFAULT ''     COMMENT '收货电话',
+  `status`         TINYINT      NOT NULL DEFAULT 0      COMMENT '0=待调度 1=已调度 2=已取消',
+  `batch_id`       BIGINT       NULL                    COMMENT '关联批次ID（调度后赋值）',
+  `enter_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '入池时间',
+  `dispatch_time`  DATETIME     NULL                    COMMENT '调度执行时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_order_id` (`order_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_warehouse_id` (`warehouse_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单调度池';
 
 
 -- ============================================================

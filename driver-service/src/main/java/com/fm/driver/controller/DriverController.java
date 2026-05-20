@@ -12,6 +12,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 /**
  * 运输员信息管理Controller
  */
@@ -95,6 +97,19 @@ public class DriverController {
             return Result.error("运输员信息不存在");
         }
         return Result.success(driver);
+    }
+
+    /**
+     * 获取所有运输员列表（管理员调度用）
+     */
+    @Operation(summary = "获取所有运输员列表", description = "管理员调度时选择司机使用")
+    @GetMapping("/admin/list")
+    public Result<List<Driver>> listAllDrivers(
+            @RequestHeader(value = "roleCode", required = false) String roleCode) {
+        if (!"admin".equals(roleCode)) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "仅管理员可访问");
+        }
+        return Result.success(driverService.getAllDrivers());
     }
 
     /**

@@ -4,6 +4,8 @@ import lombok.Data;
 import com.fm.logistics.dto.GeoJsonLineString;
 import com.fm.logistics.dto.LlmDecisionResult;
 
+import java.util.List;
+
 @Data
 public class RouteResultDTO {
 
@@ -27,6 +29,12 @@ public class RouteResultDTO {
 
     /*是否经过 LLM 增强（false 表示降级为纯 A* 结果）*/
     private boolean llmEnhanced;
+
+    /**
+     * 经过的中转站坐标列表（Hub-and-Spoke 模式下填充）
+     * 每个元素 = [lat, lng]，前端用于在地图上显示 Hub 标记点
+     */
+    private List<double[]> hubCoordinates;
     
     /*成功构造方法*/
     public static RouteResultDTO success(double distanceMeters, long durationMs, GeoJsonLineString routePoints) {

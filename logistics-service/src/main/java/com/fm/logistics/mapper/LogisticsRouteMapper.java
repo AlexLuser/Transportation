@@ -42,5 +42,6 @@ public interface LogisticsRouteMapper extends BaseMapper<LogisticsRoute> {
             "AND ABS(start_lng - #{startLon}) < 0.02")
     Map<String, Object> selectExceptionStats(@Param("startLat") double startLat,
                                              @Param("startLon") double startLon);
+
 }
 

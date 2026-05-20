@@ -54,7 +54,7 @@
     import { reactive, onMounted, markRaw } from 'vue';
     import { useRouter } from 'vue-router';
     import { useUserStore } from '@/stores/userStore';
-    import { List, ShoppingBag, UserFilled, Setting } from '@element-plus/icons-vue';
+    import { List, ShoppingBag, UserFilled, Connection, Van } from '@element-plus/icons-vue';
     import { getWarehouses } from '@/api/shop';
     import { adminSearchProducts } from '@/api/mall';
     import { getAllOrders } from '@/api/order';
@@ -66,7 +66,8 @@
         { name: '订单管理', desc: '查看和处理所有订单', path: '/admin/home/orders', icon: markRaw(List), bgColor: '#ecf5ff', iconColor: '#409eff' },
         { name: '商品管理', desc: '浏览平台全部商品', path: '/admin/home/goods', icon: markRaw(ShoppingBag), bgColor: '#fdf6ec', iconColor: '#e6a23c' },
         { name: '用户管理', desc: '查询系统用户信息', path: '/admin/home/users', icon: markRaw(UserFilled), bgColor: '#f0f9eb', iconColor: '#67c23a' },
-        { name: '系统管理', desc: '仓库配置与管理', path: '/admin/home/system', icon: markRaw(Setting), bgColor: '#fef0f0', iconColor: '#f56c6c' },
+        { name: '全国干线', desc: '干线调度、全国网络、流量规划', path: '/admin/home/national', icon: markRaw(Connection), bgColor: '#e8f4ff', iconColor: '#409eff' },
+        { name: '末端配送', desc: '城市调度、配送批次、中转站、末端仓库', path: '/admin/home/lastmile', icon: markRaw(Van), bgColor: '#fef0f0', iconColor: '#f56c6c' },
     ];
 
     const stats = reactive([

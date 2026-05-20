@@ -9,20 +9,23 @@ import java.util.Map;
 
 /**
  * 物流服务 Feign 客户端
- * 订单发货时调用，自动在 logistics-service 创建物流路线
  */
 @FeignClient(name = "logistics-service")
 public interface LogisticsFeignClient {
 
     /**
-     * 创建物流路线
-     * 请求体字段：orderId, warehouseId,
-     *             startAddress, startLatitude(可选), startLongitude(可选),
-     *             endAddress,   endLatitude(可选),   endLongitude(可选),
-     *             receiverName, receiverPhone
+     * 创建物流路线（同城发货时调用）
      */
     @PostMapping("/api/logistics/routes")
     Result<Map<String, Object>> createRoute(@RequestBody Map<String, Object> request);
+
+    /**
+     * 根据发货仓库 + 收货坐标，分配 originHub / destHub
+     * 请求体：{ warehouseId, endLat, endLng }
+     * 返回：{ originHubId, destHubId, crossCity }
+     */
+    @PostMapping("/api/logistics/routing/assign-hubs")
+    Result<Map<String, Object>> assignHubs(@RequestBody Map<String, Object> request);
 }
 
 

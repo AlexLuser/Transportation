@@ -1,0 +1,12 @@
+[33me53ed01[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfix0520[m[33m)[m HEAD@{0}: commit: 2026-05-20 update
+[33mdab8668[m[33m ([m[1;31morigin/master[m[33m, [m[1;32mmaster[m[33m)[m HEAD@{1}: reset: moving to dab866892d22a09899aed30f94a0151851647de6
+[33m46c4cb5[m HEAD@{2}: rebase (finish): returning to refs/heads/fix0520
+[33m46c4cb5[m HEAD@{3}: rebase (continue): 2026-05-20 update
+[33mdab8668[m[33m ([m[1;31morigin/master[m[33m, [m[1;32mmaster[m[33m)[m HEAD@{4}: rebase (start): checkout dab866892d22a09899aed30f94a0151851647de6
+[33me15ddfb[m HEAD@{5}: rebase (abort): returning to refs/heads/fix0520
+[33mdab8668[m[33m ([m[1;31morigin/master[m[33m, [m[1;32mmaster[m[33m)[m HEAD@{6}: rebase (start): checkout dab866892d22a09899aed30f94a0151851647de6
+[33me15ddfb[m HEAD@{7}: commit: 2026-05-20 update
+[33mf01453a[m HEAD@{8}: commit: 2026-05-20 update
+[33mdab8668[m[33m ([m[1;31morigin/master[m[33m, [m[1;32mmaster[m[33m)[m HEAD@{9}: checkout: moving from master to fix0520
+[33mdab8668[m[33m ([m[1;31morigin/master[m[33m, [m[1;32mmaster[m[33m)[m HEAD@{10}: commit: 2026-04-04 update
+[33m2f0e0f8[m HEAD@{11}: commit (initial): t

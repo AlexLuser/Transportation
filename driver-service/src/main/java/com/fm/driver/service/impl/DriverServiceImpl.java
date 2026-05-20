@@ -6,6 +6,9 @@ import com.fm.driver.entity.Driver;
 import com.fm.driver.mapper.DriverMapper;
 import com.fm.driver.service.DriverService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
@@ -19,35 +22,40 @@ public class DriverServiceImpl implements DriverService {
     private DriverMapper driverMapper;
     
     @Override
+    @Cacheable(value = "driverByUser", key = "#userId", unless = "#result == null")
     public Driver getDriverByUserId(Long userId) {
         LambdaQueryWrapper<Driver> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Driver::getUserId, userId);
         return driverMapper.selectOne(wrapper);
     }
-    
+
     @Override
+    @Cacheable(value = "driverById", key = "#driverId", unless = "#result == null")
     public Driver getDriverById(Long driverId) {
         return driverMapper.selectById(driverId);
     }
-    
+
     @Override
+    @Caching(evict = {
+        @CacheEvict(value = "driverById",   key = "#driver.id",     condition = "#driver.id != null"),
+        @CacheEvict(value = "driverByUser", key = "#driver.userId", condition = "#driver.userId != null")
+    })
     public Driver saveOrUpdateDriver(Driver driver) {
         if (driver.getId() == null) {
-            // 新增
             driverMapper.insert(driver);
         } else {
-            // 更新
             driverMapper.updateById(driver);
         }
         return driver;
     }
-    
+
     @Override
     public List<Driver> getAllDrivers() {
         return driverMapper.selectList(null);
     }
-    
+
     @Override
+    @CacheEvict(value = "driverById", key = "#driverId")
     public boolean updateDriverStatus(Long driverId, Integer status) {
         LambdaUpdateWrapper<Driver> wrapper = new LambdaUpdateWrapper<>();
         wrapper.eq(Driver::getId, driverId)

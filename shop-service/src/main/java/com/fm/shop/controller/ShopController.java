@@ -31,6 +31,21 @@ public class ShopController {
     private ShopService shopService;
     
     /**
+     * 【管理员】查询全部商家列表
+     * GET /api/shops
+     */
+    @Operation(summary = "查询全部商家（管理员）", description = "仅管理员可用，返回全部商家列表")
+    @GetMapping
+    public Result<List<Shop>> getAllShops(
+            @RequestHeader(value = "roleCode", required = false) String roleCode) {
+        if (!"admin".equals(roleCode)) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权访问");
+        }
+        List<Shop> list = shopService.getAllShops();
+        return Result.success(list);
+    }
+
+    /**
      * 获取商户信息
      * @param userIdHeader 用户ID（从请求头获取）
      * @param roleCode 角色代码（从请求头获取）

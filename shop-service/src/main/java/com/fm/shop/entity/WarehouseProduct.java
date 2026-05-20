@@ -23,7 +23,10 @@ public class WarehouseProduct {
     
     /** 关联product_info表的id（商品ID） */
     private Long productId;
-    
+
+    /** 所属商家ID（共享仓下区分不同商家库存） */
+    private Long shopId;
+
     /** 该商品在该仓库的库存数量 */
     private Integer stock;
     

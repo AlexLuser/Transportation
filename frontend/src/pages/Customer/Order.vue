@@ -1,14 +1,18 @@
 <template>
     <div class="order-container" v-loading="loading">
-        <el-tabs v-model="activeTab">
-            <el-tab-pane label="全部订单" name="all"/>
-            <el-tab-pane label="待支付" name="0"/>
-            <el-tab-pane label="待发货" name="1"/>
-            <el-tab-pane label="待揽件" name="2"/>
-            <el-tab-pane label="派送中" name="3"/>
-            <el-tab-pane label="已完成" name="4"/>
-            <el-tab-pane label="已取消" name="5"/>
-        </el-tabs>
+        <div class="order-header-bar">
+            <el-tabs v-model="activeTab" style="flex:1">
+                <el-tab-pane label="全部订单" name="all"/>
+                <el-tab-pane label="待支付" name="0"/>
+                <el-tab-pane label="待发货" name="1"/>
+                <el-tab-pane label="待揽件" name="2"/>
+                <el-tab-pane label="派送中" name="3"/>
+                <el-tab-pane label="待签收" name="6"/>
+                <el-tab-pane label="已完成" name="4"/>
+                <el-tab-pane label="已取消" name="5"/>
+            </el-tabs>
+            <el-button :icon="Refresh" size="small" :loading="loading" @click="fetchOrders" style="margin-bottom:4px">刷新</el-button>
+        </div>
         <div class="order-list">
             <el-empty v-if="filteredOrders.length === 0" description="暂无订单" class="empty-state" />
             <template v-else>
@@ -38,6 +42,9 @@
                         </template>
                         <template v-else-if="order.orderStatus === 1">
                             <el-button type="danger" plain @click="handleCancel(order.id)">取消订单</el-button>
+                        </template>
+                        <template v-else-if="order.orderStatus === 6">
+                            <el-button type="success" @click="handleSign(order.id)">确认签收</el-button>
                         </template>
                         <span v-else-if="order.orderStatus === 4" class="complete-time">
                             完成时间：{{ formatDate(order.completeTime) }}
@@ -112,52 +119,22 @@
                     </el-table>
                 </div>
 
-                <!-- 物流信息（待揽件/派送中/已完成） -->
+                <!-- 物流信息：全程追踪时间线 -->
                 <div
-                    v-if="
-                        currentDetail.order?.orderStatus === 2 ||
-                        currentDetail.order?.orderStatus === 3 ||
-                        currentDetail.order?.orderStatus === 4
-                    "
+                    v-if="currentDetail.order?.orderStatus >= 2"
                     class="detail-section"
                 >
-                    <div class="section-title">物流信息</div>
-                    <div v-if="currentRoute" class="logistics-info">
-                        <el-descriptions :column="2" border size="small">
-                            <el-descriptions-item label="配送员">{{ currentRoute.driverName || '暂未分配' }}</el-descriptions-item>
-                            <el-descriptions-item label="联系电话">{{ currentRoute.driverPhone || '-' }}</el-descriptions-item>
-                            <el-descriptions-item label="物流单号" :span="2">{{ currentRoute.route?.routeNo || '-' }}</el-descriptions-item>
-                            <el-descriptions-item label="发货地址" :span="2">{{ currentRoute.route?.startAddress || '-' }}</el-descriptions-item>
-                            <el-descriptions-item label="收货地址" :span="2">{{ currentRoute.route?.endAddress || '-' }}</el-descriptions-item>
-                            <el-descriptions-item label="路线状态">
-                                <el-tag :type="routeStatusType(currentRoute.route?.routeStatus)">
-                                    {{ currentRoute.statusDesc || routeStatusText(currentRoute.route?.routeStatus) }}
-                                </el-tag>
-                            </el-descriptions-item>
-                            <el-descriptions-item label="发货时间">{{ formatDate(currentDetail.order?.shippingTime) }}</el-descriptions-item>
-                            <el-descriptions-item v-if="currentRoute.route?.currentAddress" label="当前位置" :span="2">
-                                {{ currentRoute.route.currentAddress }}
-                            </el-descriptions-item>
-                            <el-descriptions-item v-if="currentDetail.order?.orderStatus === 4" label="完成时间" :span="2">
-                                {{ formatDate(currentDetail.order?.completeTime) }}
-                            </el-descriptions-item>
-                        </el-descriptions>
-
-                        <!-- 配送路线地图 -->
-                        <RouteMap
-                            :start-lat="currentRoute.route?.startLatitude"
-                            :start-lng="currentRoute.route?.startLongitude"
-                            :end-lat="currentRoute.route?.endLatitude"
-                            :end-lng="currentRoute.route?.endLongitude"
-                            :current-lat="currentRoute.route?.currentLatitude"
-                            :current-lng="currentRoute.route?.currentLongitude"
-                            :planned-route="currentRoute.route?.plannedRoute"
-                            :recent-tracks="currentRoute.recentTracks"
-                            :start-label="currentRoute.route?.startAddress"
-                            :end-label="currentRoute.route?.endAddress"
-                        />
-                    </div>
-                    <el-empty v-else description="暂无物流信息" :image-size="60" />
+                    <div class="section-title">物流全程追踪</div>
+                    <el-empty
+                        v-if="currentDetail.order?.orderStatus === 2 && (!orderJourney || orderJourney.length === 0)"
+                        description="订单待揽件，物流信息将在发货后更新"
+                        :image-size="60"
+                    />
+                    <LogisticsJourney
+                        v-else
+                        :segments="orderJourney ?? []"
+                        :receiver-address="currentDetail.order?.receiverAddress || currentDetail.address?.detailAddress"
+                    />
                 </div>
             </div>
 
@@ -177,11 +154,12 @@
 </template>
 
 <script setup lang="ts" name="CustomerOrder">
-    import { ref, computed, onMounted } from 'vue';
-    import { getCustomerOrders, cancelOrder, payOrder, getOrderDetail, deleteOrder } from '@/api/order';
-    import { getRouteByOrderId } from '@/api/logistics';
+    import { ref, computed, onMounted, watch } from 'vue';
+    import { getCustomerOrders, cancelOrder, payOrder, getOrderDetail, deleteOrder, signOrder } from '@/api/order';
+    import { getOrderJourney } from '@/api/logistics';
     import { ElMessage, ElMessageBox } from 'element-plus';
-    import RouteMap from '@/components/RouteMap.vue';
+    import { Refresh } from '@element-plus/icons-vue';
+    import LogisticsJourney from '@/components/LogisticsJourney.vue';
 
     const loading = ref(false);
     const orders = ref<any[]>([]);
@@ -190,7 +168,7 @@
     const detailVisible = ref(false);
     const detailLoading = ref(false);
     const currentDetail = ref<any>(null);
-    const currentRoute = ref<any>(null);
+    const orderJourney  = ref<any[]>([]);
 
     const filteredOrders = computed(() => {
         if (activeTab.value === 'all') return orders.value;
@@ -211,16 +189,16 @@
         detailVisible.value = true;
         detailLoading.value = true;
         currentDetail.value = null;
-        currentRoute.value = null;
+        orderJourney.value = [];
         try {
             const res = await getOrderDetail(order.id);
             currentDetail.value = res.data;
 
-            // 配送中或已完成，拉取物流路线
-            if (order.orderStatus === 2 || order.orderStatus === 3 || order.orderStatus === 4) {
+            // status >= 2（待揽件及之后）尝试拉取全程物流追踪
+            if (order.orderStatus >= 2) {
                 try {
-                    const routeRes = await getRouteByOrderId(order.id);
-                    currentRoute.value = routeRes.data;
+                    const journeyRes = await getOrderJourney(order.id);
+                    orderJourney.value = journeyRes.data ?? [];
                 } catch {
                     // 物流信息不存在时不报错
                 }
@@ -255,6 +233,7 @@
             1: 'primary',
             2: 'info',
             3: 'primary',
+            6: 'warning',
             4: 'success',
             5: 'danger',
         };
@@ -267,10 +246,26 @@
             1: '待发货',
             2: '待揽件',
             3: '派送中',
+            6: '待签收',
             4: '已完成',
             5: '已取消',
         };
         return map[status] ?? '未知';
+    };
+
+    const handleSign = async (orderId: number) => {
+        try {
+            await ElMessageBox.confirm(
+                '确认已收到商品？确认后订单将标记为已完成。',
+                '确认签收',
+                { confirmButtonText: '确认签收', cancelButtonText: '取消', type: 'success' }
+            );
+            await signOrder(orderId);
+            ElMessage.success('签收成功，感谢您的购买！');
+            fetchOrders();
+        } catch {
+            // 用户取消
+        }
     };
 
     const routeStatusType = (status: number) => {
@@ -337,6 +332,13 @@
         display: flex;
         flex-direction: column;
         gap: 16px;
+    }
+
+    .order-header-bar {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 8px;
     }
 
     .order-list {

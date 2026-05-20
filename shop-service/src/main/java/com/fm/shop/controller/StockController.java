@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 库存管理Controller
@@ -32,6 +33,9 @@ public class StockController {
     
     @Autowired
     private StockService stockService;
+
+    @Autowired
+    private com.fm.shop.mapper.WarehouseProductMapper warehouseProductMapper;
     
     @Autowired
     private ProductService productService;
@@ -67,6 +71,21 @@ public class StockController {
         return Result.success(stocks);
     }
     
+    /**
+     * 获取仓库库存明细（含商品名称）
+     * 传入 shopId 时只返回该商家的库存，否则返回全仓库库存（管理员用）
+     */
+    @Operation(summary = "获取仓库库存明细", description = "根据仓库ID获取该仓库商品库存及商品名称，可选按商家过滤")
+    @GetMapping("/warehouse/{warehouseId}/detail")
+    public Result<List<Map<String, Object>>> getStockDetailByWarehouse(
+            @PathVariable Long warehouseId,
+            @RequestParam(value = "shopId", required = false) Long shopId) {
+        List<Map<String, Object>> detail = (shopId != null)
+                ? warehouseProductMapper.selectStockDetailByWarehouseAndShop(warehouseId, shopId)
+                : warehouseProductMapper.selectStockDetailByWarehouseId(warehouseId);
+        return Result.success(detail);
+    }
+
     /**
      * 修改商品库存
      * @param userIdHeader 用户ID（从请求头获取）

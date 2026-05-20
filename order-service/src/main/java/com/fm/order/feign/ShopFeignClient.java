@@ -5,6 +5,8 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
@@ -63,4 +65,20 @@ public interface ShopFeignClient {
      */
     @GetMapping("/api/shops/internal/user/{userId}")
     Result<Map<String, Object>> getShopByUserId(@PathVariable("userId") Long userId);
+
+    /**
+     * 【内部接口】创建出库单（含出库明细）
+     * body 字段：warehouseId, shopId, destType, relatedId, remark, items([{productId,productName,quantity}])
+     * @return 创建的出库单信息（含 id）
+     */
+    @PostMapping("/api/outbound-orders")
+    Result<Map<String, Object>> createOutboundOrder(@RequestBody Map<String, Object> body);
+
+    /**
+     * 【内部接口】完成出库单（扣减库存）
+     * @param id 出库单 ID
+     * @return 完成后的出库单信息
+     */
+    @PutMapping("/api/outbound-orders/{id}/complete")
+    Result<Map<String, Object>> completeOutboundOrder(@PathVariable("id") Long id);
 }

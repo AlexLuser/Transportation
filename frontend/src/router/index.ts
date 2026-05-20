@@ -14,6 +14,10 @@ const routes = [
         component: () => import('@/pages/Login.vue')
     },
     {
+        path: '/register',
+        component: () => import('@/pages/Register.vue')
+    },
+    {
         path: '/admin/home',
         component: () => import('@/pages/AdminHome.vue'),
         redirect: '/admin/home/dashboard',
@@ -40,10 +44,31 @@ const routes = [
                 meta: {role: 'admin'}
             },
             {
-                path: 'system',
-                component: () => import('@/pages/Admin/System.vue'),
+                path: 'national',
+                component: () => import('@/pages/Admin/NationalBusiness.vue'),
                 meta: {role: 'admin'}
-            }
+            },
+            {
+                path: 'lastmile',
+                component: () => import('@/pages/Admin/LastMileBusiness.vue'),
+                meta: {role: 'admin'}
+            },
+            {
+                path: 'warehouse-mgmt',
+                component: () => import('@/pages/Admin/WarehouseMgmt.vue'),
+                meta: {role: 'admin'}
+            },
+            {
+                path: 'hub-operations',
+                component: () => import('@/pages/Admin/HubOperations.vue'),
+                meta: {role: 'admin'}
+            },
+            { path: 'system', redirect: '/admin/home/warehouse-mgmt' },
+            { path: 'hubs', redirect: { path: '/admin/home/lastmile', query: { tab: 'hubs' } } },
+            { path: 'batches', redirect: { path: '/admin/home/lastmile', query: { tab: 'batches' } } },
+            { path: 'dispatch', redirect: { path: '/admin/home/national', query: { tab: 'trunk' } } },
+            { path: 'national-network', redirect: { path: '/admin/home/national', query: { tab: 'network' } } },
+            { path: 'flow-plan', redirect: { path: '/admin/home/national', query: { tab: 'flow' } } }
         ]
     },
     {
@@ -104,6 +129,11 @@ const routes = [
                 path: 'stock',
                 component: () => import('@/pages/Shop/Stock.vue'),
                 meta: {role: 'shop'}
+            },
+            {
+                path: 'warehouse',
+                component: () => import('@/pages/Shop/Warehouse.vue'),
+                meta: {role: 'shop'}
             }
         ]
     },
@@ -132,6 +162,11 @@ const routes = [
                 path: 'profile',
                 component: () => import('@/pages/Driver/Profile.vue'),
                 meta: {role: 'driver'}
+            },
+            {
+                path: 'gps-test',
+                component: () => import('@/pages/Driver/GpsTest.vue'),
+                meta: {role: 'driver'}
             }
         ]
     },
@@ -155,8 +190,8 @@ router.beforeEach((to, _from, next) => {
     const token = userStore.token;
     const roleCode = userStore.userInfo?.roleCode;
 
-    if(to.path === '/login') {
-        if(token && roleCode) {
+    if(to.path === '/login' || to.path === '/register') {
+        if(token && roleCode && to.path === '/login') {
             next(roleHomeMap[roleCode]);
         } else {
             next();

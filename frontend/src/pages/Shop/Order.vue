@@ -73,7 +73,13 @@
         </el-card>
 
         <!-- ===================== 订单详情弹窗 ===================== -->
-        <el-dialog v-model="detailVisible" title="订单详情" width="700px" align-center>
+        <el-dialog
+            v-model="detailVisible"
+            title="订单详情"
+            width="740px"
+            align-center
+            @closed="shopJourney = []"
+        >
             <div v-if="detailData" class="detail-body">
                 <!-- 订单基本信息 -->
                 <el-descriptions title="基本信息" :column="2" border size="small">
@@ -116,6 +122,19 @@
                         </el-table-column>
                     </el-table>
                 </div>
+
+                <!-- 物流全程追踪（仅已发货以后的订单显示） -->
+                <div v-if="detailData.order.orderStatus >= 2 && detailData.order.orderStatus !== 5" class="items-section">
+                    <div class="section-title">物流全程追踪</div>
+                    <div v-if="detailRouteLoading" class="map-loading">
+                        <el-icon class="is-loading"><Loading /></el-icon> 路线加载中…
+                    </div>
+                    <LogisticsJourney
+                        v-else
+                        :segments="shopJourney"
+                        :receiver-address="detailData.order?.receiverAddress"
+                    />
+                </div>
             </div>
             <template #footer>
                 <el-button @click="detailVisible = false">关闭</el-button>
@@ -127,202 +146,52 @@
             </template>
         </el-dialog>
 
-        <!-- ===================== 发货 & 选仓库弹窗 ===================== -->
+        <!-- ===================== 发货弹窗（选择仓库版）===================== -->
         <el-dialog
             v-model="shipVisible"
-            title="发货确认"
-            width="520px"
+            title="选择发货仓库"
+            width="480px"
             align-center
             :close-on-click-modal="false"
         >
             <div class="ship-body" v-loading="shipLoading">
-                <el-alert
-                    title="选择发货仓库后，系统将自动规划最优配送路线（LLM 智能决策）"
-                    type="info"
-                    show-icon
-                    :closable="false"
-                    class="ship-tip"
-                />
-
-                <el-form label-width="90px" class="ship-form">
-                    <el-form-item label="订单号">
-                        <el-text>{{ shipOrder?.orderNo ?? '-' }}</el-text>
-                    </el-form-item>
+                <el-alert type="info" show-icon :closable="false" style="margin-bottom:14px">
+                    <template #title>请选择本次订单的发货仓库</template>
+                    <template #default>
+                        系统将自动判断是否需要跨城干线运输，并进入统一调度流程。
+                    </template>
+                </el-alert>
+                <el-descriptions :column="1" border size="small" style="margin-bottom:14px">
+                    <el-descriptions-item label="订单号">{{ shipOrder?.orderNo ?? '-' }}</el-descriptions-item>
+                </el-descriptions>
+                <el-form :model="shipForm" label-width="90px" size="default">
                     <el-form-item label="发货仓库" required>
                         <el-select
-                            v-model="selectedWarehouseId"
+                            v-model="shipForm.warehouseId"
                             placeholder="请选择发货仓库"
-                            style="width: 100%"
+                            style="width:100%"
                             :loading="warehousesLoading"
-                            @change="onWarehouseChange"
                         >
                             <el-option
-                                v-for="w in warehouses"
+                                v-for="w in availableWarehouses"
                                 :key="w.id"
-                                :label="w.warehouseName"
                                 :value="w.id"
-                            >
-                                <div class="warehouse-option">
-                                    <span class="w-name">{{ w.warehouseName }}</span>
-                                    <span class="w-addr">{{ w.detailAddress }}</span>
-                                </div>
-                            </el-option>
+                                :label="w.warehouseName + (w.city ? `（${w.city}）` : '')"
+                            />
                         </el-select>
-                    </el-form-item>
-                    <el-form-item label="仓库地址" v-if="selectedWarehouse">
-                        <el-text type="info">{{ selectedWarehouse.detailAddress }}</el-text>
-                    </el-form-item>
-                    <el-form-item label="仓库坐标" v-if="selectedWarehouse">
-                        <el-text type="info">
-                            {{ selectedWarehouse.latitude ?? '未录入' }}, {{ selectedWarehouse.longitude ?? '未录入' }}
-                        </el-text>
                     </el-form-item>
                 </el-form>
             </div>
             <template #footer>
                 <el-button @click="shipVisible = false" :disabled="shipLoading">取消</el-button>
-                <el-button
-                    type="primary"
-                    :loading="shipLoading"
-                    :disabled="!selectedWarehouseId"
-                    @click="handleConfirmShip"
-                >确认发货 &amp; 规划路线</el-button>
+                <el-button type="primary" :loading="shipLoading"
+                           :disabled="!shipForm.warehouseId"
+                           @click="handleConfirmShip">
+                    确认发货
+                </el-button>
             </template>
         </el-dialog>
 
-        <!-- ===================== LLM 决策结果弹窗 ===================== -->
-        <el-dialog
-            v-model="llmResultVisible"
-            title="路线规划完成 — LLM 决策结果"
-            width="680px"
-            align-center
-        >
-            <div v-if="llmResult" class="llm-body">
-
-                <!-- 基本状态 -->
-                <div class="llm-row">
-                    <el-tag :type="llmResult.llmEnhanced ? 'success' : 'warning'" size="large">
-                        {{ llmResult.llmEnhanced ? 'LLM 智能增强' : '纯 A* 兜底（LLM 调用失败）' }}
-                    </el-tag>
-                </div>
-
-                <template v-if="llmResult.llmDecision">
-                    <!-- 方案 A：LLM_JUDGE（多候选裁判） -->
-                    <el-descriptions
-                        v-if="isLlmJudgeDecision(llmResult.llmDecision)"
-                        :column="2"
-                        border
-                        size="small"
-                        class="llm-desc"
-                    >
-                        <el-descriptions-item label="选中候选路线">
-                            第 {{ llmResult.llmDecision.selectedCandidate }} 条
-                        </el-descriptions-item>
-                        <el-descriptions-item label="置信度">
-                            <el-tag
-                                :type="confidenceTag(llmResult.llmDecision.confidenceLevel)"
-                                size="small"
-                            >{{ llmResult.llmDecision.confidenceLevel }}</el-tag>
-                        </el-descriptions-item>
-                        <el-descriptions-item label="调整后预计时长" :span="2">
-                            {{ formatDuration(llmResult.llmDecision.adjustedDurationMs) }}
-                        </el-descriptions-item>
-                        <el-descriptions-item label="摘要" :span="2">
-                            {{ llmResult.llmDecision.summary || '-' }}
-                        </el-descriptions-item>
-                    </el-descriptions>
-
-                    <!-- 方案 B：LLM_WAYPOINT（战略路点 + 分段 A*） -->
-                    <el-descriptions
-                        v-else-if="isLlmWaypointDecision(llmResult.llmDecision)"
-                        :column="2"
-                        border
-                        size="small"
-                        class="llm-desc"
-                    >
-                        <el-descriptions-item label="策略" :span="2">
-                            {{ llmResult.llmDecision.strategy || '-' }}
-                        </el-descriptions-item>
-                        <el-descriptions-item label="置信度">
-                            <el-tag
-                                :type="confidenceTag(llmResult.llmDecision.confidenceLevel)"
-                                size="small"
-                            >{{ llmResult.llmDecision.confidenceLevel || '-' }}</el-tag>
-                        </el-descriptions-item>
-                        <el-descriptions-item label="预估全程均速">
-                            {{
-                                llmResult.llmDecision.expectedSpeedKmh != null
-                                    ? `${llmResult.llmDecision.expectedSpeedKmh} km/h`
-                                    : '-'
-                            }}
-                        </el-descriptions-item>
-                        <el-descriptions-item label="摘要" :span="2">
-                            {{ llmResult.llmDecision.summary || '-' }}
-                        </el-descriptions-item>
-                        <el-descriptions-item
-                            v-if="llmResult.llmDecision.waypoints?.length"
-                            label="战略路点"
-                            :span="2"
-                        >
-                            <ul class="waypoint-list">
-                                <li
-                                    v-for="(wp, wi) in llmResult.llmDecision.waypoints"
-                                    :key="wi"
-                                >
-                                    {{ wp.label || '路点' }}（{{
-                                        wp.lat != null && wp.lon != null
-                                            ? `${Number(wp.lat).toFixed(4)}, ${Number(wp.lon).toFixed(4)}`
-                                            : '坐标未返回'
-                                    }}）
-                                </li>
-                            </ul>
-                        </el-descriptions-item>
-                    </el-descriptions>
-
-                    <!-- 其它可解析结构 -->
-                    <el-descriptions v-else :column="2" border size="small" class="llm-desc">
-                        <el-descriptions-item label="置信度">
-                            <el-tag
-                                :type="confidenceTag(llmResult.llmDecision.confidenceLevel)"
-                                size="small"
-                            >{{ llmResult.llmDecision.confidenceLevel || '-' }}</el-tag>
-                        </el-descriptions-item>
-                        <el-descriptions-item label="摘要" :span="2">
-                            {{ llmResult.llmDecision.summary || '-' }}
-                        </el-descriptions-item>
-                    </el-descriptions>
-
-                    <div class="llm-section">
-                        <div class="section-title">LLM 推理过程</div>
-                        <div class="llm-reasoning">{{ llmResult.llmDecision.reasoning || '暂无推理说明' }}</div>
-                    </div>
-
-                    <div class="llm-section" v-if="llmResult.llmDecision.warnings?.length">
-                        <div class="section-title">警告 / 风险提示</div>
-                        <el-alert
-                            v-for="(w, i) in llmResult.llmDecision.warnings"
-                            :key="i"
-                            :title="w"
-                            type="warning"
-                            show-icon
-                            :closable="false"
-                            class="llm-warning"
-                        />
-                    </div>
-                </template>
-
-                <el-alert
-                    v-else
-                    title="LLM 决策数据不可用，已回退至标准 A* 路线"
-                    type="warning"
-                    show-icon
-                    :closable="false"
-                />
-            </div>
-            <template #footer>
-                <el-button type="primary" @click="llmResultVisible = false">知道了</el-button>
-            </template>
-        </el-dialog>
 
     </div>
 </template>
@@ -330,12 +199,12 @@
 <script setup lang="ts" name="ShopOrder">
     import { ref, computed, onMounted } from 'vue';
     import { ElMessage } from 'element-plus';
-    import { Search, Refresh } from '@element-plus/icons-vue';
+    import { Search, Refresh, Loading } from '@element-plus/icons-vue';
     import { getShopOrders, getOrderDetail, updateOrderStatus } from '@/api/order';
-    import { getMyShop, getWarehouses, type Warehouse } from '@/api/shop';
-    import { getAddressById } from '@/api/customer';
-    import { createRoute } from '@/api/logistics';
+    import { getMyShop, getWarehousesByShop, shipOrder as apiShipOrder } from '@/api/shop';
+    import { getOrderJourney } from '@/api/logistics';
     import { useUserStore } from '@/stores/userStore';
+    import LogisticsJourney from '@/components/LogisticsJourney.vue';
 
     const userStore = useUserStore();
 
@@ -397,160 +266,73 @@
     // ==================== 详情弹窗 ====================
     const detailVisible = ref(false);
     const detailData = ref<any>(null);
+    const shopJourney = ref<any[]>([]);
+    const detailRouteLoading = ref(false);
 
     const openDetailDialog = async (row: any) => {
         detailVisible.value = true;
         detailData.value = null;
+        shopJourney.value = [];
         try {
             const res = await getOrderDetail(row.id);
             detailData.value = res.data;
+            const status = res.data?.order?.orderStatus ?? 0;
+            if (status >= 2 && status !== 5) {
+                detailRouteLoading.value = true;
+                try {
+                    const journeyRes = await getOrderJourney(row.id);
+                    shopJourney.value = journeyRes.data ?? [];
+                } catch {
+                    shopJourney.value = [];
+                } finally {
+                    detailRouteLoading.value = false;
+                }
+            }
         } catch {
             detailVisible.value = false;
         }
     };
 
-    // ==================== 发货弹窗（选仓库） ====================
+    // ==================== 发货弹窗（含仓库选择）====================
     const shipVisible = ref(false);
     const shipLoading = ref(false);
-    const shipOrder = ref<any>(null);
-
-    const warehouses = ref<Warehouse[]>([]);
+    const shipOrder   = ref<any>(null);
+    const shipForm    = ref({ warehouseId: null as number | null });
+    const availableWarehouses = ref<any[]>([]);
     const warehousesLoading = ref(false);
-    const selectedWarehouseId = ref<number | null>(null);
-    const selectedWarehouse = computed(() =>
-        warehouses.value.find(w => w.id === selectedWarehouseId.value) ?? null
-    );
 
     const openShipDialog = async (order: any) => {
         shipOrder.value = order;
-        selectedWarehouseId.value = null;
+        shipForm.value.warehouseId = null;
         shipVisible.value = true;
         detailVisible.value = false;
-
-        if (warehouses.value.length === 0) {
-            warehousesLoading.value = true;
-            try {
-                const res = await getWarehouses();
-                warehouses.value = (res.data ?? []).filter((w: Warehouse) => w.status === 1);
-            } catch {
-                ElMessage.error('加载仓库列表失败');
-            } finally {
-                warehousesLoading.value = false;
+        // 加载仓库列表
+        warehousesLoading.value = true;
+        try {
+            if (!shopId.value) {
+                availableWarehouses.value = [];
+                return;
             }
+            const res = await getWarehousesByShop(shopId.value);
+            availableWarehouses.value = (res.data?.data ?? res.data ?? []).filter((w: any) => w.status === 1);
+        } finally {
+            warehousesLoading.value = false;
         }
-    };
-
-    const onWarehouseChange = () => {
-        // 选仓库后无需额外操作，selectedWarehouse 计算属性自动更新
     };
 
     const handleConfirmShip = async () => {
-        if (!shipOrder.value || !selectedWarehouseId.value) return;
-
-        const order = shipOrder.value;
-        const warehouse = selectedWarehouse.value;
-
-        if (!warehouse) {
-            ElMessage.error('仓库信息不存在，请刷新后重试');
-            return;
-        }
-        if (!warehouse.latitude || !warehouse.longitude) {
-            ElMessage.warning('所选仓库未录入经纬度，路线规划精度可能受影响');
-        }
-
+        if (!shipOrder.value || !shipForm.value.warehouseId) return;
         shipLoading.value = true;
         try {
-            // 1. 获取收货地址详情（含经纬度）
-            let endAddress = '';
-            let endLat: number | undefined;
-            let endLng: number | undefined;
-            let receiverName: string | undefined;
-            let receiverPhone: string | undefined;
-
-            if (order.addressId) {
-                try {
-                    const addrRes = await getAddressById(order.addressId);
-                    const addr = addrRes.data;
-                    if (addr) {
-                        const parts = [addr.province, addr.city, addr.district, addr.detailAddress].filter(Boolean);
-                        endAddress = parts.join('');
-                        endLat = addr.latitude ?? undefined;
-                        endLng = addr.longitude ?? undefined;
-                        receiverName = addr.receiverName ?? undefined;
-                        receiverPhone = addr.receiverPhone ?? undefined;
-                    }
-                } catch {
-                    endAddress = '收货地址';
-                }
-            }
-
-            const startParts = [warehouse.province, warehouse.city, warehouse.district, warehouse.detailAddress].filter(Boolean);
-            const startAddress = startParts.join('') || warehouse.warehouseName;
-
-            // 2. 先更新订单状态（创建配送记录等），再创建物流路线，避免与 order-service 重复调用 logistics 并发竞态
-            await updateOrderStatus(order.id, 2);
-            const routeRes = await createRoute({
-                orderId: order.id,
-                warehouseId: selectedWarehouseId.value,
-                startAddress,
-                startLatitude: warehouse.latitude ?? undefined,
-                startLongitude: warehouse.longitude ?? undefined,
-                endAddress: endAddress || '收货地址',
-                endLatitude: endLat,
-                endLongitude: endLng,
-                receiverName,
-                receiverPhone,
-            });
-
+            await apiShipOrder(shipOrder.value.id, shipForm.value.warehouseId);
             shipVisible.value = false;
+            ElMessage.success('发货成功！已提交配送申请，系统将自动规划路线');
             fetchOrders();
-
-            // 3. 展示 LLM 决策结果（与 logistics CreateRouteResponseDTO 对齐）
-            const raw = routeRes.data as {
-                llmEnhanced?: boolean;
-                llmDecision?: Record<string, unknown> | null;
-            } | null;
-            llmResult.value = raw
-                ? {
-                      llmEnhanced: raw.llmEnhanced ?? false,
-                      llmDecision: raw.llmDecision ?? null,
-                  }
-                : null;
-            llmResultVisible.value = true;
-
         } catch (e: any) {
-            ElMessage.error(typeof e === 'string' ? e : '发货失败，请稍后重试');
+            ElMessage.error(typeof e === 'string' ? e : '操作失败，请稍后重试');
         } finally {
             shipLoading.value = false;
         }
-    };
-
-    // ==================== LLM 结果弹窗 ====================
-    const llmResultVisible = ref(false);
-    const llmResult = ref<any>(null);
-
-    const confidenceTag = (level: string | undefined) => {
-        const map: Record<string, string> = { HIGH: 'success', MEDIUM: 'warning', LOW: 'danger' };
-        return map[level ?? ''] ?? 'info';
-    };
-
-    /** LLM_JUDGE：多候选裁判 */
-    const isLlmJudgeDecision = (d: any) =>
-        d != null && d.selectedCandidate != null && d.selectedCandidate !== undefined;
-
-    /** LLM_WAYPOINT：战略路点（与裁判方案字段不同） */
-    const isLlmWaypointDecision = (d: any) =>
-        d != null &&
-        !isLlmJudgeDecision(d) &&
-        (Boolean(d.strategy) || (Array.isArray(d.waypoints) && d.waypoints.length > 0));
-
-    const formatDuration = (ms: number | null | undefined) => {
-        if (!ms) return '-';
-        const minutes = Math.round(ms / 60000);
-        if (minutes < 60) return `${minutes} 分钟`;
-        const h = Math.floor(minutes / 60);
-        const m = minutes % 60;
-        return m > 0 ? `${h} 小时 ${m} 分钟` : `${h} 小时`;
     };
 
     // ==================== 工具函数 ====================
@@ -629,6 +411,18 @@
     .ship-body { display: flex; flex-direction: column; gap: 16px; }
     .ship-tip { border-radius: 6px; }
     .ship-form { padding-top: 4px; }
+
+    .ship-time-tip {
+        margin-top: 6px;
+        font-size: 12px;
+        padding: 5px 10px;
+        border-radius: 4px;
+        line-height: 1.6;
+    }
+    .tip-warning { background: #fdf6ec; color: #e6a23c; border: 1px solid #f5dab1; }
+    .tip-info    { background: #ecf5ff; color: #409eff; border: 1px solid #b3d8ff; }
+    .tip-success { background: #f0f9eb; color: #67c23a; border: 1px solid #c2e7b0; }
+
     .warehouse-option {
         display: flex;
         flex-direction: column;
@@ -638,26 +432,14 @@
     .w-name { font-weight: 500; }
     .w-addr { font-size: 12px; color: #909399; }
 
-    /* LLM 结果弹窗 */
-    .llm-body {
+    .map-loading {
         display: flex;
-        flex-direction: column;
-        gap: 18px;
-    }
-    .llm-row { display: flex; align-items: center; gap: 12px; }
-    .llm-desc { margin-top: 4px; }
-    .waypoint-list { margin: 0; padding-left: 1.2em; }
-    .llm-section { display: flex; flex-direction: column; gap: 8px; }
-    .llm-reasoning {
-        background: #f5f7fa;
-        border-radius: 6px;
-        padding: 12px 14px;
+        align-items: center;
+        gap: 6px;
+        height: 60px;
+        justify-content: center;
+        color: #909399;
         font-size: 13px;
-        line-height: 1.8;
-        color: #303133;
-        white-space: pre-wrap;
-        max-height: 220px;
-        overflow-y: auto;
     }
-    .llm-warning { border-radius: 6px; }
+
 </style>

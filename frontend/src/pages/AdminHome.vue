@@ -20,9 +20,21 @@
                         <el-icon><UserFilled /></el-icon>
                         <span>用户管理</span>
                     </el-menu-item>
-                    <el-menu-item index="/admin/home/system">
-                        <el-icon><Setting /></el-icon>
-                        <span>系统管理</span>
+                    <el-menu-item index="/admin/home/warehouse-mgmt">
+                        <el-icon><OfficeBuilding /></el-icon>
+                        <span>仓储管理</span>
+                    </el-menu-item>
+                    <el-menu-item index="/admin/home/hub-operations">
+                        <el-icon><Operation /></el-icon>
+                        <span>中转站作业</span>
+                    </el-menu-item>
+                    <el-menu-item index="/admin/home/national">
+                        <el-icon><Connection /></el-icon>
+                        <span>全国干线</span>
+                    </el-menu-item>
+                    <el-menu-item index="/admin/home/lastmile">
+                        <el-icon><Van /></el-icon>
+                        <span>末端配送</span>
                     </el-menu-item>
                 </el-menu>
             </el-aside>
@@ -47,7 +59,7 @@
     import { logout } from '@/api/auth';
     import { router } from '@/router';
     import { useUserStore } from '@/stores/userStore';
-    import { DataBoard, List, ShoppingBag, UserFilled, Setting } from '@element-plus/icons-vue';
+    import { DataBoard, List, ShoppingBag, UserFilled, Connection, Van, OfficeBuilding, Operation } from '@element-plus/icons-vue';
 
     const userStore = useUserStore();
 
