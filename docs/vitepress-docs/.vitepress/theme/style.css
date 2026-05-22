@@ -1,0 +1,18 @@
+.mermaid-wrapper {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: var(--vp-c-bg-soft);
+  border-radius: 8px;
+  text-align: center;
+  overflow-x: auto;
+}
+
+.mermaid-wrapper svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* 暗色模式适配 */
+.dark .mermaid-wrapper {
+  background: var(--vp-c-bg-soft);
+}

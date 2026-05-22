@@ -1,0 +1,25 @@
+{
+  "name": "transportation-docs",
+  "version": "1.0.0",
+  "description": "Transportation 物流系统文档 - VitePress 版",
+  "type": "module",
+  "scripts": {
+    "docs:dev": "vitepress dev",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview"
+  },
+  "keywords": [
+    "transportation",
+    "logistics",
+    "documentation"
+  ],
+  "author": "Transportation Team",
+  "license": "MIT",
+  "devDependencies": {
+    "vitepress": "^1.0.0"
+  },
+  "dependencies": {
+    "mermaid": "^11.15.0",
+    "vitepress-plugin-mermaid": "^2.0.17"
+  }
+}

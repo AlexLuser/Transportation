@@ -58,3 +58,4 @@ docs/thesis/参考论文提取文本*.txt
 
 ### CodeBuddy ###
 .codebuddy/
+docs/vitepress-docs/.vitepress/cache/

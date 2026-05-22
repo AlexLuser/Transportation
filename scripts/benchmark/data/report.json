@@ -1,0 +1,239 @@
+{
+  "timestamp": "2026-05-22T00:27:51.118722",
+  "gateway": "http://localhost:8090",
+  "concurrency_levels": [
+    1,
+    5,
+    10,
+    20,
+    50
+  ],
+  "tests": [
+    {
+      "test": "cache_comparison",
+      "endpoints": [
+        {
+          "endpoint": "仓库列表",
+          "url": "http://localhost:8090/api/warehouses",
+          "n_requests": 50,
+          "cold": {
+            "count": 50,
+            "mean": 14.03,
+            "median": 8.93,
+            "p95": 29.68,
+            "p99": 72.86,
+            "min": 6.47,
+            "max": 72.86,
+            "std": 11.31
+          },
+          "warm": {
+            "count": 50,
+            "mean": 5.42,
+            "median": 4.97,
+            "p95": 8.65,
+            "p99": 9.31,
+            "min": 3.67,
+            "max": 9.31,
+            "std": 1.49
+          },
+          "speedup": 2.59
+        },
+        {
+          "endpoint": "商城商品列表",
+          "url": "http://localhost:8090/api/products?current=1&size=10",
+          "n_requests": 50,
+          "cold": {
+            "count": 50,
+            "mean": 11.64,
+            "median": 7.73,
+            "p95": 21.35,
+            "p99": 22.45,
+            "min": 5.83,
+            "max": 22.45,
+            "std": 6.21
+          },
+          "warm": {
+            "count": 50,
+            "mean": 4.91,
+            "median": 4.93,
+            "p95": 6.06,
+            "p99": 6.17,
+            "min": 3.58,
+            "max": 6.17,
+            "std": 0.66
+          },
+          "speedup": 2.37
+        }
+      ],
+      "url": "http://localhost:8090/api/warehouses",
+      "n_requests": 50,
+      "cold": {
+        "count": 50,
+        "mean": 14.03,
+        "median": 8.93,
+        "p95": 29.68,
+        "p99": 72.86,
+        "min": 6.47,
+        "max": 72.86,
+        "std": 11.31
+      },
+      "warm": {
+        "count": 50,
+        "mean": 5.42,
+        "median": 4.97,
+        "p95": 8.65,
+        "p99": 9.31,
+        "min": 3.67,
+        "max": 9.31,
+        "std": 1.49
+      },
+      "speedup": 2.59
+    },
+    {
+      "test": "logistics_concurrency",
+      "url": "http://localhost:8090/api/logistics/national-network/hubs?level=2",
+      "concurrency_levels": [
+        1,
+        5,
+        10,
+        20,
+        50
+      ],
+      "summary": {
+        "1": {
+          "count": 50,
+          "mean": 5.17,
+          "median": 4.39,
+          "p95": 9.37,
+          "p99": 10.07,
+          "min": 3.18,
+          "max": 10.07,
+          "std": 1.94,
+          "success_rate": 100.0,
+          "tps": 193.4
+        },
+        "5": {
+          "count": 50,
+          "mean": 15.53,
+          "median": 13.49,
+          "p95": 31.07,
+          "p99": 56.03,
+          "min": 7.01,
+          "max": 56.03,
+          "std": 8.45,
+          "success_rate": 100.0,
+          "tps": 64.4
+        },
+        "10": {
+          "count": 100,
+          "mean": 46.61,
+          "median": 36.79,
+          "p95": 88.34,
+          "p99": 94.05,
+          "min": 9.36,
+          "max": 94.05,
+          "std": 28.56,
+          "success_rate": 100.0,
+          "tps": 21.5
+        },
+        "20": {
+          "count": 200,
+          "mean": 20.23,
+          "median": 19.16,
+          "p95": 33.33,
+          "p99": 45.42,
+          "min": 8.0,
+          "max": 53.05,
+          "std": 6.93,
+          "success_rate": 100.0,
+          "tps": 49.4
+        },
+        "50": {
+          "count": 500,
+          "mean": 1233.13,
+          "median": 65.25,
+          "p95": 11692.51,
+          "p99": 11755.7,
+          "min": 10.61,
+          "max": 11790.12,
+          "std": 3380.7,
+          "success_rate": 100.0,
+          "tps": 0.8
+        }
+      }
+    },
+    {
+      "test": "order_query_concurrency",
+      "url": "http://localhost:8090/api/orders?current=1&size=10",
+      "concurrency_levels": [
+        1,
+        5,
+        10,
+        20,
+        50
+      ],
+      "summary": {
+        "1": {
+          "count": 50,
+          "mean": 9.23,
+          "median": 8.29,
+          "p95": 16.24,
+          "p99": 21.78,
+          "min": 5.52,
+          "max": 21.78,
+          "std": 3.48,
+          "success_rate": 100.0,
+          "tps": 108.3
+        },
+        "5": {
+          "count": 50,
+          "mean": 10.53,
+          "median": 9.78,
+          "p95": 15.31,
+          "p99": 18.08,
+          "min": 6.22,
+          "max": 18.08,
+          "std": 2.88,
+          "success_rate": 100.0,
+          "tps": 94.9
+        },
+        "10": {
+          "count": 100,
+          "mean": 19.38,
+          "median": 18.62,
+          "p95": 32.17,
+          "p99": 52.37,
+          "min": 7.29,
+          "max": 52.37,
+          "std": 7.65,
+          "success_rate": 100.0,
+          "tps": 51.6
+        },
+        "20": {
+          "count": 200,
+          "mean": 23.72,
+          "median": 23.18,
+          "p95": 37.26,
+          "p99": 45.09,
+          "min": 9.49,
+          "max": 46.35,
+          "std": 7.95,
+          "success_rate": 100.0,
+          "tps": 42.2
+        },
+        "50": {
+          "count": 500,
+          "mean": 44.37,
+          "median": 40.92,
+          "p95": 78.74,
+          "p99": 107.44,
+          "min": 11.79,
+          "max": 127.19,
+          "std": 18.53,
+          "success_rate": 100.0,
+          "tps": 22.5
+        }
+      }
+    }
+  ]
+}

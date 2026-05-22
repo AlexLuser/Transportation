@@ -1,0 +1,10 @@
+
+> transportation-docs@1.0.0 docs:dev
+> vitepress dev --port 5173
+
+Port 5173 is in use, trying another one...
+
+  vitepress v1.6.4
+
+  ➜  Local:   http://localhost:5174/
+  ➜  Network: use --host to expose
