@@ -1,0 +1,323 @@
+networks:
+  transport-net:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  redis-data:
+  rabbitmq-data:
+  nacos-data:
+
+services:
+
+  # =========================================================
+  # 基础设施层
+  # =========================================================
+
+  mysql:
+    image: mysql:8.0
+    container_name: transport-mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --init-connect='SET NAMES utf8mb4'
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: transportation
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-12345678}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./database/all.sql:/docker-entrypoint-initdb.d/01_all.sql:ro
+      - ./database/logistics_history_test.sql:/docker-entrypoint-initdb.d/02_logistics_history_test.sql:ro
+      # 03和04因collation冲突需手动执行：docker exec -i transport-mysql bash -c 'mysql -u root -prootpassword transportation' < database/mcmf_test_data.sql
+    networks:
+      - transport-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uadmin", "-p${MYSQL_PASSWORD:-12345678}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: transport-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - transport-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: transport-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"   # RabbitMQ 管理界面
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - transport-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  nacos:
+    image: nacos/nacos-server:v2.3.0
+    platform: linux/amd64
+    container_name: transport-nacos
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+      JVM_XMN: 128m
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    volumes:
+      - nacos-data:/home/nacos/data
+    networks:
+      - transport-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8848/nacos/v1/console/health/liveness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+
+  # =========================================================
+  # 后端微服务层
+  # =========================================================
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+    container_name: transport-auth
+    environment:
+      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dspring.cloud.nacos.discovery.fail-fast=false"
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-12345678}
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+    ports:
+      - "8082:8082"
+    networks:
+      - transport-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    restart: on-failure
+
+  user-service:
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    container_name: transport-user
+    environment:
+      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dspring.cloud.nacos.discovery.fail-fast=false"
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-12345678}
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+    ports:
+      - "8081:8081"
+    networks:
+      - transport-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    restart: on-failure
+
+  customer-service:
+    build:
+      context: .
+      dockerfile: customer-service/Dockerfile
+    container_name: transport-customer
+    environment:
+      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dspring.cloud.nacos.discovery.fail-fast=false"
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-12345678}
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    ports:
+      - "8083:8083"
+    networks:
+      - transport-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: on-failure
+
+  shop-service:
+    build:
+      context: .
+      dockerfile: shop-service/Dockerfile
+    container_name: transport-shop
+    environment:
+      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dspring.cloud.nacos.discovery.fail-fast=false"
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-12345678}
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_RABBITMQ_HOST: rabbitmq
+    ports:
+      - "8084:8084"
+    networks:
+      - transport-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  order-service:
+    build:
+      context: .
+      dockerfile: order-service/Dockerfile
+    container_name: transport-order
+    environment:
+      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dspring.cloud.nacos.discovery.fail-fast=false"
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-12345678}
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_RABBITMQ_HOST: rabbitmq
+    ports:
+      - "8085:8085"
+    networks:
+      - transport-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  driver-service:
+    build:
+      context: .
+      dockerfile: driver-service/Dockerfile
+    container_name: transport-driver
+    environment:
+      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dspring.cloud.nacos.discovery.fail-fast=false"
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-12345678}
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_RABBITMQ_HOST: rabbitmq
+    ports:
+      - "8086:8086"
+    networks:
+      - transport-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  logistics-service:
+    build:
+      context: .
+      dockerfile: logistics-service/Dockerfile
+    container_name: transport-logistics
+    environment:
+      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dspring.cloud.nacos.discovery.fail-fast=false"
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-12345678}
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_RABBITMQ_HOST: rabbitmq
+    ports:
+      - "8087:8087"
+    volumes:
+      # 将本地 OSM 地图文件和路径缓存挂载进容器
+      - ./shanghai-260310.osm.pbf:/app/shanghai-260310.osm.pbf:ro
+      - ./graph-cache:/app/graph-cache
+    networks:
+      - transport-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  gateway-service:
+    build:
+      context: .
+      dockerfile: gateway-service/Dockerfile
+    container_name: transport-gateway
+    environment:
+      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dspring.cloud.nacos.discovery.fail-fast=false"
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+    ports:
+      - "8090:8090"
+    networks:
+      - transport-net
+    depends_on:
+      nacos:
+        condition: service_healthy
+    restart: on-failure
+
+  # =========================================================
+  # 前端层
+  # =========================================================
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: transport-frontend
+    ports:
+      - "80:80"
+    networks:
+      - transport-net
+    depends_on:
+      - gateway-service
+    restart: on-failure
