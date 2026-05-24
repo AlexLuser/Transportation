@@ -16,6 +16,7 @@ import com.fm.driver.mq.ReopenOrderMessage;
 import com.fm.driver.mq.RouteStatusMessage;
 import com.fm.driver.mq.UpdateOrderStatusMessage;
 import com.fm.driver.service.DeliveryService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
@@ -29,6 +30,7 @@ import java.util.List;
 /**
  * 配送服务实现类
  */
+@Slf4j
 @Service
 public class DeliveryServiceImpl implements DeliveryService {
 
@@ -41,22 +43,6 @@ public class DeliveryServiceImpl implements DeliveryService {
     // ----------------------------------------------------------------
     //  查询类
     // ----------------------------------------------------------------
-
-    @Override
-    public PageResult<OrderDelivery> getPendingDeliveries(Long current, Long size) {
-        Page<OrderDelivery> page = new Page<>(current, size);
-        LambdaQueryWrapper<OrderDelivery> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(OrderDelivery::getDeliveryStatus, 0);
-        wrapper.orderByDesc(OrderDelivery::getCreateTime);
-
-        IPage<OrderDelivery> pageResult = deliveryMapper.selectPage(page, wrapper);
-        return new PageResult<>(
-                pageResult.getCurrent(),
-                pageResult.getSize(),
-                pageResult.getTotal(),
-                pageResult.getRecords()
-        );
-    }
 
     @Override
     public PageResult<OrderDelivery> getMyDeliveries(Long driverId, Long current, Long size,
@@ -98,47 +84,6 @@ public class DeliveryServiceImpl implements DeliveryService {
                 .in(OrderDelivery::getDeliveryStatus, 1, 2)
                 .orderByDesc(OrderDelivery::getAcceptTime);
         return deliveryMapper.selectList(wrapper);
-    }
-
-    // ----------------------------------------------------------------
-    //  接单（B4：接单后绑定物流路线）
-    // ----------------------------------------------------------------
-
-    @Override
-    @CacheEvict(value = "inProgressDeliveries", key = "#driverId")
-    public OrderDelivery acceptDelivery(Long deliveryId, Long driverId, Long vehicleId) {
-        OrderDelivery delivery = deliveryMapper.selectById(deliveryId);
-        if (delivery == null) {
-            throw new BusinessException(ResultCode.FAIL.getCode(), "配送记录不存在");
-        }
-        if (delivery.getDeliveryStatus() != 0) {
-            throw new BusinessException(ResultCode.FAIL.getCode(), "该订单已被接单或状态不正确");
-        }
-
-        // 更新配送状态为已接单
-        delivery.setDriverId(driverId);
-        delivery.setVehicleId(vehicleId);
-        delivery.setDeliveryStatus(1);  // 已接单
-        delivery.setAcceptTime(new Date());
-        deliveryMapper.updateById(delivery);
-
-        // #9: 同步订单状态 → 派送中（干线路线 orderId=null，跳过）
-        if (delivery.getOrderId() != null) {
-            rabbitTemplate.convertAndSend(
-                RabbitMQConfig.EXCHANGE,
-                RabbitMQConfig.ROUTING_ORDER_STATUS_UPDATE,
-                new UpdateOrderStatusMessage(delivery.getOrderId(), 3)
-            );
-        }
-
-        // #10: 绑定物流路线（若 delivery 存有 routeId 则直接绑定，否则按 orderId 查找）
-        rabbitTemplate.convertAndSend(
-            RabbitMQConfig.EXCHANGE,
-            RabbitMQConfig.ROUTING_ROUTE_BIND,
-            new BindRouteMessage(delivery.getOrderId(), driverId, deliveryId, delivery.getRouteId())
-        );
-
-        return delivery;
     }
 
     // ----------------------------------------------------------------
@@ -335,6 +280,8 @@ public class DeliveryServiceImpl implements DeliveryService {
      *   segmentType=2（末端）— 干线到达 Hub 后触发
      */
     public OrderDelivery createLastMileDelivery(LastMileActivateMessage msg) {
+        log.info("[DEBUG][createLastMileDelivery] 收到消息: segmentType={}, orderId={}, batchId={}, routeId={}, preAssignedDriverId={}",
+                msg.getSegmentType(), msg.getOrderId(), msg.getBatchId(), msg.getRouteId(), msg.getPreAssignedDriverId());
         // 幂等：干线按 batchId+segmentType=1 判断，末端按 orderId 判断
         int segType = msg.getSegmentType() != null ? msg.getSegmentType() : 2;
         if (segType == 1) {
@@ -354,7 +301,6 @@ public class DeliveryServiceImpl implements DeliveryService {
 
         OrderDelivery delivery = new OrderDelivery();
         delivery.setOrderId(msg.getOrderId());          // 干线为 null，末端为具体订单ID
-        delivery.setDeliveryStatus(0);                  // 待接单
         delivery.setDeliveryAddress(msg.getEndAddress());
         delivery.setReceiverName(msg.getReceiverName() != null ? msg.getReceiverName() : "");
         delivery.setReceiverPhone(msg.getReceiverPhone() != null ? msg.getReceiverPhone() : "");
@@ -362,68 +308,108 @@ public class DeliveryServiceImpl implements DeliveryService {
         delivery.setBatchId(msg.getBatchId());
         delivery.setHubId(msg.getHubId());
         delivery.setRouteId(msg.getRouteId());          // 存储 routeId 供接单时直接绑定
+
+        Long preDriver = msg.getPreAssignedDriverId();
+        if (preDriver != null) {
+            delivery.setDriverId(preDriver);
+            delivery.setDeliveryStatus(1);
+            delivery.setAcceptTime(new Date());
+            log.info("[DEBUG][createLastMileDelivery] 管理员预分配司机 driverId={}, deliveryStatus=1", preDriver);
+        } else {
+            delivery.setDeliveryStatus(0);
+            log.warn("[DEBUG][createLastMileDelivery] 无预分配司机，deliveryStatus=0（孤立记录，无人可见）");
+        }
+
         deliveryMapper.insert(delivery);
+        log.info("[DEBUG][createLastMileDelivery] 配送记录已插入，deliveryId={}, driverId={}, status={}",
+                delivery.getId(), delivery.getDriverId(), delivery.getDeliveryStatus());
+
+        if (preDriver != null) {
+            // #10: 绑定物流路线（直接按 routeId 绑定）
+            rabbitTemplate.convertAndSend(
+                RabbitMQConfig.EXCHANGE,
+                RabbitMQConfig.ROUTING_ROUTE_BIND,
+                new BindRouteMessage(delivery.getOrderId(), preDriver, delivery.getId(), delivery.getRouteId())
+            );
+            // #9: 单订单末端 → 订单状态→派送中(3)
+            if (delivery.getOrderId() != null) {
+                rabbitTemplate.convertAndSend(
+                    RabbitMQConfig.EXCHANGE,
+                    RabbitMQConfig.ROUTING_ORDER_STATUS_UPDATE,
+                    new UpdateOrderStatusMessage(delivery.getOrderId(), 3)
+                );
+            }
+        }
 
         return delivery;
     }
 
     // ----------------------------------------------------------------
-    //  智能调度：司机主动接单路线段
+    //  管理员调度：直接为已有配送记录指派司机（直送批次末端用）
     // ----------------------------------------------------------------
 
     @Override
     @CacheEvict(value = "inProgressDeliveries", key = "#driverId")
-    public OrderDelivery acceptSegment(Long routeId, Long driverId, Long vehicleId,
-                                       Long orderId, String startAddress, String endAddress,
-                                       String receiverName, String receiverPhone,
-                                       Integer routeType, Long batchId, Long hubId) {
-        // 幂等：通过 routeId 判断（干线路线 orderId 为 null，改用 batchId+routeType 组合）
-        LambdaQueryWrapper<OrderDelivery> check = new LambdaQueryWrapper<>();
-        if (orderId != null) {
-            check.eq(OrderDelivery::getOrderId, orderId)
-                 .eq(OrderDelivery::getDriverId, driverId)
-                 .in(OrderDelivery::getDeliveryStatus, 1, 2);
-        } else if (batchId != null) {
-            // 干线：按 batchId + segmentType=1 + driverId 幂等
-            check.eq(OrderDelivery::getBatchId, batchId)
-                 .eq(OrderDelivery::getSegmentType, 1)
-                 .eq(OrderDelivery::getDriverId, driverId)
-                 .in(OrderDelivery::getDeliveryStatus, 1, 2);
-        }
-        OrderDelivery existing = (orderId != null || batchId != null)
-                ? deliveryMapper.selectOne(check) : null;
-        if (existing != null) return existing;
+    public boolean assignExistingDeliveryByRoute(Long routeId, Long driverId) {
+        LambdaQueryWrapper<OrderDelivery> q = new LambdaQueryWrapper<>();
+        q.eq(OrderDelivery::getRouteId, routeId)
+         .eq(OrderDelivery::getDeliveryStatus, 0);
+        OrderDelivery delivery = deliveryMapper.selectOne(q);
+        log.info("[DEBUG][assignExistingDeliveryByRoute] routeId={}, driverId={}, 找到记录={}",
+                routeId, driverId, delivery == null ? "NULL" : "id=" + delivery.getId() + ", segmentType=" + delivery.getSegmentType());
+        if (delivery == null) return false;
 
-        // 创建配送记录（直接进入"已接单"状态）
-        OrderDelivery delivery = new OrderDelivery();
-        delivery.setOrderId(orderId);
         delivery.setDriverId(driverId);
-        delivery.setVehicleId(vehicleId);
-        delivery.setDeliveryStatus(1);           // 已接单
-        delivery.setDeliveryAddress(endAddress != null ? endAddress : startAddress);
-        delivery.setReceiverName(receiverName != null ? receiverName : "");
-        delivery.setReceiverPhone(receiverPhone != null ? receiverPhone : "");
-        delivery.setSegmentType(routeType != null ? routeType : 0);
-        delivery.setBatchId(batchId);
-        delivery.setHubId(hubId);
-        delivery.setRouteId(routeId);           // 存储 routeId 供多停靠路线逐站操作使用
+        delivery.setDeliveryStatus(1);
         delivery.setAcceptTime(new Date());
-        deliveryMapper.insert(delivery);
+        deliveryMapper.updateById(delivery);
 
-        // 通知 order-service 订单进入派送中（仅末端/直送段且 orderId 非空才更新）
-        if (orderId != null && (routeType == null || routeType == 0 || routeType == 2)) {
-            rabbitTemplate.convertAndSend(
-                RabbitMQConfig.EXCHANGE,
-                RabbitMQConfig.ROUTING_ORDER_STATUS_UPDATE,
-                new UpdateOrderStatusMessage(orderId, 3)
-            );
-        }
-
-        // #10: 绑定物流路线（指定 routeId，logistics-service 直接用 routeId 绑定）
+        // #10: 绑定路线
         rabbitTemplate.convertAndSend(
             RabbitMQConfig.EXCHANGE,
             RabbitMQConfig.ROUTING_ROUTE_BIND,
-            new BindRouteMessage(orderId, driverId, delivery.getId(), routeId)
+            new BindRouteMessage(delivery.getOrderId(), driverId, delivery.getId(), routeId)
+        );
+        // #9: 末端单订单 → 订单状态→派送中(3)
+        if (delivery.getOrderId() != null) {
+            rabbitTemplate.convertAndSend(
+                RabbitMQConfig.EXCHANGE,
+                RabbitMQConfig.ROUTING_ORDER_STATUS_UPDATE,
+                new UpdateOrderStatusMessage(delivery.getOrderId(), 3)
+            );
+        }
+        log.info("[Admin调度] 直送末端配送记录已指派：routeId={}, driverId={}, deliveryId={}",
+                routeId, driverId, delivery.getId());
+        return true;
+    }
+
+    // ----------------------------------------------------------------
+    //  管理员调度：直接指派干线司机
+    // ----------------------------------------------------------------
+
+    @Override
+    public OrderDelivery adminAssignTrunkDriver(Long batchId, Long driverId, Long vehicleId) {
+        LambdaQueryWrapper<OrderDelivery> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(OrderDelivery::getBatchId, batchId)
+               .eq(OrderDelivery::getSegmentType, 1)
+               .eq(OrderDelivery::getDeliveryStatus, 0);
+        OrderDelivery delivery = deliveryMapper.selectOne(wrapper);
+        if (delivery == null) {
+            throw new BusinessException(ResultCode.FAIL.getCode(),
+                "未找到批次 " + batchId + " 的干线待接单记录，请检查批次是否已生成干线路线");
+        }
+
+        delivery.setDriverId(driverId);
+        delivery.setVehicleId(vehicleId);
+        delivery.setDeliveryStatus(1);
+        delivery.setAcceptTime(new Date());
+        deliveryMapper.updateById(delivery);
+
+        // #10: 绑定干线物流路线（routeId 在 delivery.routeId 中）
+        rabbitTemplate.convertAndSend(
+            RabbitMQConfig.EXCHANGE,
+            RabbitMQConfig.ROUTING_ROUTE_BIND,
+            new BindRouteMessage(null, driverId, delivery.getId(), delivery.getRouteId())
         );
 
         return delivery;

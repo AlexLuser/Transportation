@@ -1,6 +1,7 @@
 package com.fm.order.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -60,14 +61,17 @@ public class Order {
 
     private Integer customerDeleted; // 顾客软删除：0=正常，1=已隐藏
 
-    // ── 个人寄件扩展字段 ──────────────────────────────────────────
-
+    // ── 个人寄件扩展字段（数据库无对应列，标记为非表字段避免SQL错误）──
+    @TableField(exist = false)
     private Integer orderType;       // 订单类型：0=商户发货订单（默认），1=个人寄件
 
+    @TableField(exist = false)
     private String senderAddress;    // 取件地址文本快照（个人寄件用）
 
+    @TableField(exist = false)
     private Double senderLatitude;   // 取件地址纬度
 
+    @TableField(exist = false)
     private Double senderLongitude;  // 取件地址经度
 
     private Date createTime;        // 创建时间

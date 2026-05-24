@@ -138,14 +138,14 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             return "shop".equals(roleCode);
         }
         
-        // 承运物（商品）服务：商户管理、管理员审核；消费者不直接访问商品接口
+        // 商品服务：商户管理商品，管理员审核，消费者可浏览商品详情（下单流程需要）
         if (path.startsWith("/api/products")) {
-            return "shop".equals(roleCode) || "admin".equals(roleCode);
+            return "customer".equals(roleCode) || "shop".equals(roleCode) || "admin".equals(roleCode);
         }
         
-        // 商城服务：仅商户和管理员可访问（ToB物流平台，消费者不作为商城浏览主体）
+        // 商城服务：消费者浏览商城，商户管理自己的店铺，管理员可访问
         if (path.startsWith("/api/mall")) {
-            return "shop".equals(roleCode) || "admin".equals(roleCode);
+            return "customer".equals(roleCode) || "shop".equals(roleCode) || "admin".equals(roleCode);
         }
         
         // 仓库服务：只允许shop角色访问

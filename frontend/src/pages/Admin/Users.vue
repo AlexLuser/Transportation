@@ -67,7 +67,7 @@
                         <el-table-column label="角色" width="90" align="center">
                             <template #default="{ row }">
                                 <el-tag :type="row.role === 'shop' ? 'warning' : 'success'" size="small">
-                                    {{ row.role === 'shop' ? '商户' : '运输员' }}
+                                    {{ row.role === 'shop' ? '商户' : '司机' }}
                                 </el-tag>
                             </template>
                         </el-table-column>
@@ -131,14 +131,14 @@
 
     const ROLES = [
         { value: 1, label: '管理员' },
-        { value: 2, label: '发货用户' },
+        { value: 2, label: '顾客用户' },
         { value: 3, label: '商户用户' },
         { value: 4, label: '运输员' },
     ];
 
     const PERMISSION_MAP: Record<number, { label: string; code: string; tag: string }> = {
         1: { label: '管理员',   code: 'admin',    tag: 'danger' },
-        2: { label: '发货用户', code: 'customer', tag: 'primary' },
+        2: { label: '顾客用户', code: 'customer', tag: 'primary' },
         3: { label: '商户用户', code: 'shop',     tag: 'warning' },
         4: { label: '运输员',   code: 'driver',   tag: 'success' },
     };
@@ -224,7 +224,7 @@
 
     const handleReview = async (row: any, approve: boolean) => {
         const action = approve ? '通过' : '拒绝';
-        const roleLabel = row.role === 'shop' ? '商户' : '运输员';
+        const roleLabel = row.role === 'shop' ? '商户' : '司机';
         try {
             await ElMessageBox.confirm(
                 `确定要${action}用户「${row.username}」的${roleLabel}注册申请吗？${!approve ? '\n拒绝后该用户账号将被删除。' : ''}`,

@@ -6,43 +6,49 @@
             <div class="toolbar-left">
                 <el-input
                     v-model="keyword"
-                    placeholder="搜索货物名称 / 编码"
+                    placeholder="搜索商品名称 / 编码"
                     clearable
                     class="search-input"
                     @keyup.enter="handleSearch"
                     @clear="handleSearch"
                 />
                 <el-select v-model="statusFilter" placeholder="全部状态" clearable class="status-select" @change="handleSearch">
-                    <el-option label="启用" :value="1" />
-                    <el-option label="停用" :value="0" />
+                    <el-option label="上架" :value="1" />
+                    <el-option label="下架" :value="0" />
                     <el-option label="待审核" :value="2" />
                 </el-select>
                 <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
 
-                <!-- 货物数量统计 -->
+                <!-- 商品数量统计 -->
                 <div class="stat-tags">
                     <el-tag type="info" size="small">全部 {{ statsTotal }}</el-tag>
-                    <el-tag type="success" size="small">启用 {{ statsOnSale }}</el-tag>
-                    <el-tag type="info" effect="plain" size="small">停用 {{ statsOffSale }}</el-tag>
+                    <el-tag type="success" size="small">上架 {{ statsOnSale }}</el-tag>
+                    <el-tag type="info" effect="plain" size="small">下架 {{ statsOffSale }}</el-tag>
                     <el-tag type="warning" size="small">待审核 {{ statsPending }}</el-tag>
                 </div>
             </div>
-            <el-button type="success" :icon="Plus" @click="openAddDialog">新增货物</el-button>
+            <el-button type="success" :icon="Plus" @click="openAddDialog">新增商品</el-button>
         </div>
 
-        <!-- 货物表格 -->
+        <!-- 商品表格 -->
         <el-card shadow="never" class="table-card">
             <el-table :data="products" v-loading="loading" row-key="id" stripe>
-                <el-table-column label="货物名称" prop="productName" min-width="160" show-overflow-tooltip />
-                <el-table-column label="货物编码" prop="productCode" width="130" show-overflow-tooltip />
-                <el-table-column label="申报价值" width="110">
+                <el-table-column label="商品名称" prop="productName" min-width="160" show-overflow-tooltip />
+                <el-table-column label="商品编码" prop="productCode" width="130" show-overflow-tooltip />
+                <el-table-column label="售价" width="100">
                     <template #default="{ row }">
                         <span class="price-text">¥{{ row.price }}</span>
                     </template>
                 </el-table-column>
-                <el-table-column label="计量单位" prop="unit" width="90" />
+                <el-table-column label="原价" width="100">
+                    <template #default="{ row }">
+                        <span class="original-price-text" v-if="row.originalPrice">¥{{ row.originalPrice }}</span>
+                        <span class="text-muted" v-else>-</span>
+                    </template>
+                </el-table-column>
+                <el-table-column label="单位" prop="unit" width="80" />
                 <el-table-column label="重量(kg)" prop="weight" width="100" />
-                <el-table-column label="已发件数" prop="salesCount" width="90" />
+                <el-table-column label="销量" prop="salesCount" width="80" />
                 <el-table-column label="状态" width="90">
                     <template #default="{ row }">
                         <el-tag :type="statusTagType(row.status)" size="small">
@@ -78,7 +84,7 @@
         </el-card>
 
         <!-- ===================== 详情弹窗 ===================== -->
-        <el-dialog v-model="detailVisible" title="货物详情" width="780px" align-center>
+        <el-dialog v-model="detailVisible" title="商品详情" width="780px" align-center>
             <div v-if="detailProduct" class="detail-body">
                 <!-- 左：图片 -->
                 <div class="detail-img-wrap">
@@ -93,23 +99,26 @@
                 <div class="detail-info">
                     <div class="detail-name">{{ detailProduct.productName }}</div>
                     <div class="detail-price-row">
-                        <span class="price-label">申报价值</span>
                         <span class="price-text lg">¥{{ detailProduct.price }}</span>
+                        <span class="original-price-text"
+                            v-if="detailProduct.originalPrice && detailProduct.originalPrice > detailProduct.price">
+                            原价 ¥{{ detailProduct.originalPrice }}
+                        </span>
                     </div>
 
                     <el-descriptions :column="2" border size="small" class="detail-desc">
-                        <el-descriptions-item label="货物编码">{{ detailProduct.productCode ?? '-' }}</el-descriptions-item>
-                        <el-descriptions-item label="货物分类">{{ detailProduct.categoryId ?? '-' }}</el-descriptions-item>
-                        <el-descriptions-item label="计量单位">{{ detailProduct.unit ?? '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="商品编码">{{ detailProduct.productCode ?? '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="分类ID">{{ detailProduct.categoryId ?? '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="单位">{{ detailProduct.unit ?? '-' }}</el-descriptions-item>
                         <el-descriptions-item label="重量">{{ detailProduct.weight ? detailProduct.weight + ' kg' : '-' }}</el-descriptions-item>
-                        <el-descriptions-item label="已发件数">{{ detailProduct.salesCount ?? 0 }} 件</el-descriptions-item>
+                        <el-descriptions-item label="销量">{{ detailProduct.salesCount ?? 0 }} 件</el-descriptions-item>
                         <el-descriptions-item label="状态">
                             <el-tag :type="statusTagType(detailProduct.status)" size="small">
                                 {{ statusLabel(detailProduct.status) }}
                             </el-tag>
                         </el-descriptions-item>
                         <el-descriptions-item label="创建时间" :span="2">{{ formatDate(detailProduct.createTime) }}</el-descriptions-item>
-                        <el-descriptions-item label="货物描述" :span="2">{{ detailProduct.description ?? '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="商品描述" :span="2">{{ detailProduct.description ?? '-' }}</el-descriptions-item>
                     </el-descriptions>
 
                     <!-- 库存信息 -->
@@ -133,14 +142,14 @@
             </div>
             <template #footer>
                 <el-button @click="detailVisible = false">关闭</el-button>
-                <el-button type="primary" @click="openEditFromDetail">编辑货物</el-button>
+                <el-button type="primary" @click="openEditFromDetail">编辑商品</el-button>
             </template>
         </el-dialog>
 
         <!-- ===================== 新增 / 编辑弹窗 ===================== -->
         <el-dialog
             v-model="formVisible"
-            :title="isEdit ? '编辑货物' : '新增货物'"
+            :title="isEdit ? '编辑商品' : '新增商品'"
             width="600px"
             align-center
             @closed="resetForm"
@@ -154,27 +163,32 @@
             >
                 <el-row :gutter="16">
                     <el-col :span="24">
-                        <el-form-item label="货物名称" prop="productName">
-                            <el-input v-model="formData.productName" placeholder="请输入货物名称" />
+                        <el-form-item label="商品名称" prop="productName">
+                            <el-input v-model="formData.productName" placeholder="请输入商品名称" />
                         </el-form-item>
                     </el-col>
                     <el-col :span="12">
-                        <el-form-item label="货物编码">
-                            <el-input v-model="formData.productCode" placeholder="货物编码（选填）" />
+                        <el-form-item label="商品编码">
+                            <el-input v-model="formData.productCode" placeholder="SKU编码（选填）" />
                         </el-form-item>
                     </el-col>
                     <el-col :span="12">
-                        <el-form-item label="货物分类">
+                        <el-form-item label="分类ID">
                             <el-input-number v-model="formData.categoryId" :min="1" :precision="0" placeholder="选填" style="width:100%" controls-position="right" />
                         </el-form-item>
                     </el-col>
                     <el-col :span="12">
-                        <el-form-item label="申报价值" prop="price">
-                            <el-input-number v-model="formData.price" :min="0" :precision="2" placeholder="请输入申报价值" style="width:100%" controls-position="right" />
+                        <el-form-item label="售价" prop="price">
+                            <el-input-number v-model="formData.price" :min="0" :precision="2" placeholder="请输入售价" style="width:100%" controls-position="right" />
                         </el-form-item>
                     </el-col>
                     <el-col :span="12">
-                        <el-form-item label="计量单位">
+                        <el-form-item label="原价">
+                            <el-input-number v-model="formData.originalPrice" :min="0" :precision="2" placeholder="选填" style="width:100%" controls-position="right" />
+                        </el-form-item>
+                    </el-col>
+                    <el-col :span="12">
+                        <el-form-item label="单位">
                             <el-input v-model="formData.unit" placeholder="件 / 箱 / kg…" />
                         </el-form-item>
                     </el-col>
@@ -183,18 +197,18 @@
                             <el-input-number v-model="formData.weight" :min="0" :precision="3" placeholder="选填" style="width:100%" controls-position="right" />
                         </el-form-item>
                     </el-col>
-                    <!-- 编辑模式才显示启用/停用切换，新增不显示（后端默认待审核） -->
+                    <!-- 编辑模式才显示上架/下架切换，新增不显示（后端默认待审核） -->
                     <el-col :span="24" v-if="isEdit">
                         <el-form-item label="状态">
                             <el-radio-group v-model="formData.status">
-                                <el-radio :value="1">启用</el-radio>
-                                <el-radio :value="0">停用</el-radio>
+                                <el-radio :value="1">上架</el-radio>
+                                <el-radio :value="0">下架</el-radio>
                             </el-radio-group>
                             <span class="status-hint" v-if="formData.status === 2">（当前待审核，保存后不变）</span>
                         </el-form-item>
                     </el-col>
                     <el-col :span="24">
-                        <el-form-item label="货物图片">
+                        <el-form-item label="商品图片">
                             <el-upload
                                 v-model:file-list="uploadFileList"
                                 list-type="picture-card"
@@ -212,12 +226,12 @@
                         </el-form-item>
                     </el-col>
                     <el-col :span="24">
-                        <el-form-item label="货物描述">
+                        <el-form-item label="商品描述">
                             <el-input
                                 v-model="formData.description"
                                 type="textarea"
                                 :rows="3"
-                                placeholder="请输入货物描述（选填）"
+                                placeholder="请输入商品描述（选填）"
                             />
                         </el-form-item>
                     </el-col>
@@ -366,8 +380,8 @@
     const formData = reactive<Product>(emptyForm());
 
     const formRules: FormRules = {
-        productName: [{ required: true, message: '请输入货物名称', trigger: 'blur' }],
-        price: [{ required: true, message: '请输入申报价值', trigger: 'blur' }],
+        productName: [{ required: true, message: '请输入商品名称', trigger: 'blur' }],
+        price: [{ required: true, message: '请输入售价', trigger: 'blur' }],
     };
 
     // 图片选择时读取为 DataURL 用于本地预览
@@ -431,10 +445,10 @@
             const payload: Product = { ...formData, images: buildImagesJson() };
             if (isEdit.value) {
                 await updateProduct(payload);
-                ElMessage.success('货物修改成功');
+                ElMessage.success('商品修改成功');
             } else {
                 await addProduct(payload);
-                ElMessage.success('货物新增成功');
+                ElMessage.success('商品新增成功');
             }
             formVisible.value = false;
             fetchProducts();
@@ -446,7 +460,7 @@
     // ==================== 删除 ====================
     const handleDelete = (row: Product) => {
         ElMessageBox.confirm(
-            `确定要删除货物「${row.productName}」吗？此操作不可恢复。`,
+            `确定要删除商品「${row.productName}」吗？此操作不可恢复。`,
             '删除确认',
             { type: 'warning', confirmButtonText: '确定删除', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger' }
         ).then(async () => {
@@ -458,8 +472,8 @@
 
     // ==================== 工具函数 ====================
     const statusLabel = (status: number | undefined) => {
-        if (status === 1) return '启用';
-        if (status === 0) return '停用';
+        if (status === 1) return '上架';
+        if (status === 0) return '下架';
         if (status === 2) return '待审核';
         return '-';
     };
@@ -525,19 +539,19 @@
     /* 表格卡片 */
     .table-card { border-radius: 8px; }
 
-    .price-label {
-        font-size: 13px;
-        color: #606266;
-        margin-right: 4px;
-    }
-
     .price-text {
-        color: #409eff;
+        color: #f56c6c;
         font-weight: 600;
     }
 
     .price-text.lg {
         font-size: 24px;
+    }
+
+    .original-price-text {
+        color: #909399;
+        text-decoration: line-through;
+        font-size: 13px;
     }
 
     .text-muted { color: #c0c4cc; }

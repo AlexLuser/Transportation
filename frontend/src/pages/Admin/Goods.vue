@@ -3,39 +3,39 @@
 
         <div class="toolbar">
             <div class="toolbar-left">
-                <el-input v-model="keyword" placeholder="搜索承运物名称" clearable class="search-input"
+                <el-input v-model="keyword" placeholder="搜索商品名称" clearable class="search-input"
                     @keyup.enter="handleSearch" @clear="handleSearch" />
                 <el-select v-model="statusFilter" placeholder="全部状态" clearable class="status-select" @change="handleSearch">
-                    <el-option label="启用" :value="1" />
-                    <el-option label="停用" :value="0" />
+                    <el-option label="上架" :value="1" />
+                    <el-option label="下架" :value="0" />
                     <el-option label="待审核" :value="2" />
                 </el-select>
                 <el-select v-model="sortType" class="sort-select" @change="handleSearch">
-                    <el-option label="最新创建" value="createTime_desc" />
+                    <el-option label="最新上架" value="createTime_desc" />
                     <el-option label="价格最低" value="price_asc" />
-                    <el-option label="发件数最高" value="salesCount_desc" />
+                    <el-option label="销量最高" value="salesCount_desc" />
                 </el-select>
                 <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
             </div>
-            <span class="result-hint">共 {{ total }} 件承运物</span>
+            <span class="result-hint">共 {{ total }} 件商品</span>
         </div>
 
         <el-card shadow="never" class="table-card" v-loading="loading">
             <el-table :data="products" stripe>
-                <el-table-column label="承运物名称" prop="productName" min-width="160" show-overflow-tooltip />
-                <el-table-column label="承运物编码" prop="productCode" width="130" show-overflow-tooltip />
+                <el-table-column label="商品名称" prop="productName" min-width="160" show-overflow-tooltip />
+                <el-table-column label="商品编码" prop="productCode" width="130" show-overflow-tooltip />
                 <el-table-column label="所属商户" prop="shopId" width="90" align="center" />
-                <el-table-column label="申报价值" width="100">
+                <el-table-column label="售价" width="100">
                     <template #default="{ row }"><span class="price-text">¥{{ row.price }}</span></template>
                 </el-table-column>
-                <el-table-column label="参考价值" width="100">
+                <el-table-column label="原价" width="100">
                     <template #default="{ row }">
                         <span class="original-price" v-if="row.originalPrice">¥{{ row.originalPrice }}</span>
                         <span class="text-muted" v-else>-</span>
                     </template>
                 </el-table-column>
                 <el-table-column label="单位" prop="unit" width="80" />
-                <el-table-column label="已发件数" prop="salesCount" width="90" align="center" />
+                <el-table-column label="销量" prop="salesCount" width="80" align="center" />
                 <el-table-column label="状态" width="90">
                     <template #default="{ row }">
                         <el-tag :type="statusTagType(row.status)" size="small">
@@ -69,7 +69,7 @@
             </div>
         </el-card>
 
-        <!-- 承运物详情弹窗 -->
+        <!-- 商品详情弹窗 -->
         <el-dialog v-model="detailVisible" :title="detailProduct?.productName" width="700px" align-center>
             <div v-if="detailProduct" class="detail-body">
                 <div class="detail-img-wrap">
@@ -88,18 +88,18 @@
                     </div>
                     <el-descriptions :column="2" border size="small">
                         <el-descriptions-item label="所属商户">{{ detailProduct.shopId }}</el-descriptions-item>
-                        <el-descriptions-item label="承运物编码">{{ detailProduct.productCode ?? '-' }}</el-descriptions-item>
-                        <el-descriptions-item label="承运物分类">{{ detailProduct.categoryId ?? '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="商品编码">{{ detailProduct.productCode ?? '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="商品分类">{{ detailProduct.categoryId ?? '-' }}</el-descriptions-item>
                         <el-descriptions-item label="单位">{{ detailProduct.unit ?? '-' }}</el-descriptions-item>
                         <el-descriptions-item label="重量">{{ detailProduct.weight ? detailProduct.weight + ' kg' : '-' }}</el-descriptions-item>
-                        <el-descriptions-item label="已发件数">{{ detailProduct.salesCount ?? 0 }} 件</el-descriptions-item>
+                        <el-descriptions-item label="销量">{{ detailProduct.salesCount ?? 0 }} 件</el-descriptions-item>
                         <el-descriptions-item label="状态">
                             <el-tag :type="statusTagType(detailProduct.status)" size="small">
                                 {{ statusLabel(detailProduct.status) }}
                             </el-tag>
                         </el-descriptions-item>
                         <el-descriptions-item label="创建时间">{{ formatDate(detailProduct.createTime) }}</el-descriptions-item>
-                        <el-descriptions-item label="承运物描述" :span="2">{{ detailProduct.description || '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="商品描述" :span="2">{{ detailProduct.description || '-' }}</el-descriptions-item>
                     </el-descriptions>
                 </div>
             </div>
@@ -164,11 +164,11 @@
     const openDetail = (row: any) => { detailProduct.value = { ...row }; detailVisible.value = true; };
 
     const handleApprove = async (row: any) => {
-        await ElMessageBox.confirm(`确认将承运物「${row.productName}」审核通过（启用）吗？`, '审核确认', { type: 'warning' });
+        await ElMessageBox.confirm(`确认将商品「${row.productName}」审核通过（上架）吗？`, '审核确认', { type: 'warning' });
         approving.value = true;
         try {
             await adminApproveProduct(row.id, row);
-            ElMessage.success('审核通过，承运物档案已启用');
+            ElMessage.success('审核通过，商品已上架');
             detailVisible.value = false;
             fetchProducts();
         } catch {
@@ -178,7 +178,7 @@
         }
     };
 
-    const statusLabel = (s: number) => s === 1 ? '启用' : s === 0 ? '停用' : s === 2 ? '待审核' : '-';
+    const statusLabel = (s: number) => s === 1 ? '上架' : s === 0 ? '下架' : s === 2 ? '待审核' : '-';
     const statusTagType = (s: number) => s === 1 ? 'success' : s === 0 ? 'info' : 'warning';
 
     const getFirstImage = (images: string) => {

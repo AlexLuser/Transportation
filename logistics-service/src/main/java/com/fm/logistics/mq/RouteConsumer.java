@@ -132,17 +132,9 @@ public class RouteConsumer {
             pool.setOriginHubId(message.getOriginHubId());
             pool.setDestHubId(message.getDestHubId());
             pool.setIsCrossCity(message.isCrossCity() ? 1 : 0);
-            // 调度起点类型：优先使用消息中的值，默认为 0（仓库）
-            int originType = (message.getDispatchOriginType() != null) ? message.getDispatchOriginType() : 0;
-            pool.setDispatchOriginType(originType);
-
-            if (originType == 2) {
-                // 个人寄件：使用消息中的发件人地址作为调度起点
-                pool.setDispatchOriginLat(message.getSenderLat());
-                pool.setDispatchOriginLng(message.getSenderLng());
-                pool.setDispatchOriginAddr(message.getSenderAddress());
-            } else if (message.getWarehouseId() != null) {
-                // 商户订单：从仓库表读取起点坐标
+            pool.setDispatchOriginType(0); // 初始为仓库起点
+            // 填充仓库起点坐标，供调度预览 LLM 计算距离，无需前端再查
+            if (message.getWarehouseId() != null) {
                 com.fm.logistics.entity.Warehouse wh = warehouseMapper.selectById(message.getWarehouseId());
                 if (wh != null) {
                     pool.setDispatchOriginLat(wh.getLatitude());

@@ -3,7 +3,6 @@ package com.fm.order.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.fm.common.dto.PageResult;
 import com.fm.order.dto.CreateOrderRequestDTO;
-import com.fm.order.dto.CreatePersonalShipmentRequestDTO;
 import com.fm.order.dto.OrderDetailDTO;
 import com.fm.order.entity.Order;
 
@@ -101,14 +100,6 @@ public interface OrderService extends IService<Order> {
      * @param customerId 当前顾客ID（用于鉴权）
      */
     boolean signOrder(Long orderId, Long customerId);
-
-    /**
-     * 创建个人寄件单（不依赖商户/仓库，通过发件人坐标接入全国 Hub 网络）
-     * @param customerId 顾客ID
-     * @param request    个人寄件请求（含取件地址、收件地址、货物信息）
-     * @return 订单详情
-     */
-    OrderDetailDTO createPersonalShipment(Long customerId, CreatePersonalShipmentRequestDTO request);
 
     /**
      * 商户发货（含仓库选择 + Hub 分配）

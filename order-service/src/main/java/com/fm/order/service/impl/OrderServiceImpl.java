@@ -11,7 +11,6 @@ import com.fm.common.result.Result;
 import com.fm.common.result.ResultCode;
 import com.fm.order.config.RabbitMQConfig;
 import com.fm.order.dto.CreateOrderRequestDTO;
-import com.fm.order.dto.CreatePersonalShipmentRequestDTO;
 import com.fm.order.dto.OrderDetailDTO;
 import com.fm.order.entity.Order;
 import com.fm.order.entity.OrderItem;
@@ -297,20 +296,18 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                     Long oh = order.getOriginHubId();
                     Long dh = order.getDestHubId();
                     boolean poolCrossCity = oh != null && dh != null && !oh.equals(dh);
-                    AddToPoolMessage poolMsg = new AddToPoolMessage();
-                    poolMsg.setOrderId(orderId);
-                    poolMsg.setShopId(order.getShopId());
-                    poolMsg.setWarehouseId(order.getWarehouseId());
-                    poolMsg.setEndAddress(fullAddress.toString());
-                    poolMsg.setEndLat(endLat);
-                    poolMsg.setEndLng(endLng);
-                    poolMsg.setReceiverName(receiverName);
-                    poolMsg.setReceiverPhone(receiverPhone);
-                    poolMsg.setRemark(order.getRemark());
-                    poolMsg.setOriginHubId(oh);
-                    poolMsg.setDestHubId(dh);
-                    poolMsg.setCrossCity(poolCrossCity);
-                    poolMsg.setDispatchOriginType(0);
+                    AddToPoolMessage poolMsg = new AddToPoolMessage(
+                        orderId,
+                        order.getShopId(),
+                        order.getWarehouseId(),
+                        fullAddress.toString(),
+                        endLat, endLng,
+                        receiverName, receiverPhone,
+                        order.getRemark(),
+                        oh,
+                        dh,
+                        poolCrossCity
+                    );
                     rabbitTemplate.convertAndSend(
                         RabbitMQConfig.EXCHANGE,
                         RabbitMQConfig.ROUTING_ADD_TO_POOL,
@@ -408,178 +405,22 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     @Override
     @Transactional
-    public OrderDetailDTO createPersonalShipment(Long customerId, CreatePersonalShipmentRequestDTO request) {
-        if (request.getSenderAddressId() == null) {
-            throw new BusinessException(ResultCode.FAIL.getCode(), "取件地址不能为空");
-        }
-        if (request.getDeliveryAddressId() == null) {
-            throw new BusinessException(ResultCode.FAIL.getCode(), "收件地址不能为空");
-        }
-        if (request.getCargoName() == null || request.getCargoName().isBlank()) {
-            throw new BusinessException(ResultCode.FAIL.getCode(), "货物名称不能为空");
-        }
-
-        // 查取件地址（获取坐标，用于 Hub 分配）
-        Result<Map<String, Object>> senderAddrResult = customerFeignClient.getAddressById(request.getSenderAddressId());
-        if (senderAddrResult.getCode() != 200 || senderAddrResult.getData() == null) {
-            throw new BusinessException(ResultCode.FAIL.getCode(), "取件地址不存在");
-        }
-        Map<String, Object> senderAddr = senderAddrResult.getData();
-
-        // 查收件地址
-        Result<Map<String, Object>> deliveryAddrResult = customerFeignClient.getAddressById(request.getDeliveryAddressId());
-        if (deliveryAddrResult.getCode() != 200 || deliveryAddrResult.getData() == null) {
-            throw new BusinessException(ResultCode.FAIL.getCode(), "收件地址不存在");
-        }
-
-        // 拼接取件地址文本快照
-        Map<String, Object> sa = senderAddr;
-        String senderAddressText = java.util.stream.Stream.of(
-                sa.get("province"), sa.get("city"), sa.get("district"), sa.get("detailAddress"))
-                .filter(v -> v != null && !v.toString().isBlank())
-                .map(Object::toString)
-                .collect(java.util.stream.Collectors.joining());
-        Double senderLat = sa.get("latitude") != null ? Double.valueOf(sa.get("latitude").toString()) : null;
-        Double senderLng = sa.get("longitude") != null ? Double.valueOf(sa.get("longitude").toString()) : null;
-
-        // 运费计算：基础 12 元 + 超出 1kg 部分每 kg 加 2 元
-        double weight = request.getWeight() != null ? request.getWeight() : 0.0;
-        double fee = 12.0 + Math.max(0, weight - 1.0) * 2.0;
-        BigDecimal shippingFee = BigDecimal.valueOf(fee).setScale(2, java.math.RoundingMode.HALF_UP);
-
-        // 构建订单
-        Order order = new Order();
-        order.setOrderNo(generateOrderNo());
-        order.setCustomerId(customerId);
-        order.setShopId(null);                                   // 个人寄件无商户
-        order.setAddressId(request.getDeliveryAddressId());
-        order.setOrderType(1);                                   // 个人寄件
-        order.setSenderAddress(senderAddressText);
-        order.setSenderLatitude(senderLat);
-        order.setSenderLongitude(senderLng);
-        order.setProductAmount(BigDecimal.ZERO);
-        order.setShippingFee(shippingFee);
-        order.setTotalAmount(shippingFee);
-        order.setOrderStatus(0);   // 待支付
-        order.setPaymentStatus(0);
-        order.setCustomerDeleted(0);
-        order.setRemark(request.getRemark());
-        orderMapper.insert(order);
-
-        // 构建货物明细（productId=null，使用货物名称）
-        int qty = request.getQuantity() != null && request.getQuantity() > 0 ? request.getQuantity() : 1;
-        java.math.BigDecimal declaredValue = request.getDeclaredValue() != null
-                ? request.getDeclaredValue() : BigDecimal.ZERO;
-        OrderItem item = new OrderItem();
-        item.setOrderId(order.getId());
-        item.setProductId(null);
-        item.setProductName(request.getCargoName());
-        item.setProductPrice(declaredValue);
-        item.setQuantity(qty);
-        item.setSubtotal(declaredValue.multiply(BigDecimal.valueOf(qty)));
-        orderItemMapper.insert(item);
-
-        return getOrderDetail(order.getId());
-    }
-
-    @Override
-    @Transactional
     public boolean payOrder(Long orderId) {
         Order order = orderMapper.selectById(orderId);
         if (order == null) {
             throw new BusinessException(ResultCode.FAIL.getCode(), "订单不存在");
         }
+
         if (order.getPaymentStatus() == 1) {
             throw new BusinessException(ResultCode.FAIL.getCode(), "订单已支付");
         }
 
-        // ── 个人寄件：支付后自动做 Hub 分配，直接进入「待揽件」──
-        if (Integer.valueOf(1).equals(order.getOrderType())) {
-            Result<Map<String, Object>> addrResult = customerFeignClient.getAddressById(order.getAddressId());
-            Map<String, Object> addr = addrResult.getData();
-            Double endLat = addr != null && addr.get("latitude") != null
-                    ? Double.valueOf(addr.get("latitude").toString()) : null;
-            Double endLng = addr != null && addr.get("longitude") != null
-                    ? Double.valueOf(addr.get("longitude").toString()) : null;
-
-            Long originHubId = null, destHubId = null;
-            boolean crossCity = false;
-            try {
-                Map<String, Object> req = new java.util.HashMap<>();
-                // warehouseId 不传（null），传发件人坐标
-                req.put("startLat", order.getSenderLatitude());
-                req.put("startLng", order.getSenderLongitude());
-                req.put("endLat", endLat);
-                req.put("endLng", endLng);
-                Result<Map<String, Object>> hubResult = logisticsFeignClient.assignHubs(req);
-                if (hubResult.getCode() == 200 && hubResult.getData() != null) {
-                    Map<String, Object> hubData = hubResult.getData();
-                    originHubId = hubData.get("originHubId") != null
-                            ? Long.valueOf(hubData.get("originHubId").toString()) : null;
-                    destHubId = hubData.get("destHubId") != null
-                            ? Long.valueOf(hubData.get("destHubId").toString()) : null;
-                    crossCity = Boolean.parseBoolean(String.valueOf(hubData.getOrDefault("crossCity", false)));
-                }
-            } catch (Exception e) {
-                log.warn("[payOrder-personal] Hub分配失败，降级同城模式: {}", e.getMessage());
-            }
-
-            // 更新订单：Hub + 状态直接到「待揽件」
-            LambdaUpdateWrapper<Order> uw = new LambdaUpdateWrapper<>();
-            uw.eq(Order::getId, orderId)
-              .set(Order::getPaymentStatus, 1)
-              .set(Order::getPaymentTime, new Date())
-              .set(Order::getOriginHubId, originHubId)
-              .set(Order::getDestHubId, destHubId)
-              .set(Order::getOrderStatus, 2)   // 待揽件（跳过商户发货步骤）
-              .set(Order::getShippingTime, new Date());
-            orderMapper.update(null, uw);
-
-            // 发 MQ 入调度池
-            if (addr != null) {
-                AddToPoolMessage msg = new AddToPoolMessage();
-                msg.setOrderId(orderId);
-                msg.setShopId(null);
-                msg.setWarehouseId(null);
-                StringBuilder endAddr = new StringBuilder();
-                for (String key : new String[]{"province", "city", "district", "detailAddress"}) {
-                    if (addr.get(key) != null) endAddr.append(addr.get(key).toString());
-                }
-                msg.setEndAddress(endAddr.toString());
-                msg.setEndLat(endLat);
-                msg.setEndLng(endLng);
-                msg.setReceiverName(addr.get("receiverName") != null ? addr.get("receiverName").toString() : "");
-                msg.setReceiverPhone(addr.get("receiverPhone") != null ? addr.get("receiverPhone").toString() : "");
-                msg.setRemark(order.getRemark());
-                msg.setOriginHubId(originHubId);
-                msg.setDestHubId(destHubId);
-                msg.setCrossCity(crossCity);
-                // 个人寄件专属字段
-                msg.setDispatchOriginType(2);
-                msg.setSenderAddress(order.getSenderAddress());
-                msg.setSenderLat(order.getSenderLatitude());
-                msg.setSenderLng(order.getSenderLongitude());
-                // 取件人信息从取件地址获取（receiverName/receiverPhone 存的是取件联系人）
-                Result<Map<String, Object>> sAddrResult = customerFeignClient.getAddressById(
-                        // 个人寄件的 senderAddress 已落库文本，坐标已落库，通过 order.addressId 是收件地址
-                        // 发件人联系方式存在 msg 的 senderName/senderPhone（暂留空，可在 Profile 完善）
-                        order.getAddressId());
-                msg.setSenderName("");
-                msg.setSenderPhone("");
-                rabbitTemplate.convertAndSend(
-                        RabbitMQConfig.EXCHANGE,
-                        RabbitMQConfig.ROUTING_ADD_TO_POOL,
-                        msg);
-            }
-            return true;
-        }
-
-        // ── 商户订单：原有逻辑不变 ──
         LambdaUpdateWrapper<Order> wrapper = new LambdaUpdateWrapper<>();
         wrapper.eq(Order::getId, orderId)
-                .set(Order::getPaymentStatus, 1)
-                .set(Order::getOrderStatus, 1)   // 待发货
+                .set(Order::getPaymentStatus, 1) // 已支付
+                .set(Order::getOrderStatus, 1) // 待发货
                 .set(Order::getPaymentTime, new Date());
+
         return orderMapper.update(null, wrapper) > 0;
     }
 

@@ -7,6 +7,8 @@ import com.fm.shop.entity.OutboundOrder;
 import com.fm.shop.entity.OutboundOrderItem;
 import com.fm.shop.mapper.OutboundOrderItemMapper;
 import com.fm.shop.mapper.OutboundOrderMapper;
+import com.fm.common.exception.BusinessException;
+import com.fm.common.result.ResultCode;
 import com.fm.shop.service.OutboundOrderService;
 import com.fm.shop.service.StockService;
 import com.fm.shop.service.WarehouseLocationService;
@@ -62,12 +64,18 @@ public class OutboundOrderServiceImpl extends ServiceImpl<OutboundOrderMapper, O
         if (order == null) return null;
 
         List<OutboundOrderItem> items = getItems(orderId);
+        boolean salesOrderShip = "SALES_ORDER".equals(order.getDestType());
         for (OutboundOrderItem item : items) {
-            // 原子扣减库存
-            stockService.deductStock(order.getWarehouseId(), item.getProductId(), item.getQuantity());
-            // 释放库位占用
+            if (!salesOrderShip) {
+                boolean ok = stockService.deductStock(order.getWarehouseId(), item.getProductId(), item.getQuantity());
+                if (!ok) {
+                    throw new BusinessException(ResultCode.FAIL,
+                            "库存不足，无法完成出库：商品「" + item.getProductName() + "」");
+                }
+            }
+            // 释放库位占用（销售订单发货时仅在此处扣减库位占用，仓级库存已由下单 MQ 扣减）
             if (item.getLocationId() != null) {
-                locationService.updateStock(item.getLocationId(), -item.getQuantity());
+                locationService.adjustStock(item.getLocationId(), order.getWarehouseId(), -item.getQuantity());
             }
             item.setStatus("DONE");
             itemMapper.updateById(item);

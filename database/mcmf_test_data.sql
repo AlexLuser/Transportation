@@ -11,8 +11,6 @@
 -- =============================================================================
 
 USE `transportation`;
-SET NAMES utf8mb4;
-SET CHARACTER SET utf8mb4;
 
 -- ---------------------------------------------------------------------------
 -- 收货地址（customer_info.id=1 即种子「张三」；与后续手工下单共用同一顾客体系）
@@ -200,7 +198,7 @@ SELECT
   0
 FROM `order_info` o
 JOIN `customer_address` a ON o.`address_id` = a.`id`
-WHERE o.`order_no` LIKE CONCAT('MCMF-TEST-', @tid, '-%') COLLATE utf8mb4_unicode_ci;
+WHERE o.`order_no` LIKE CONCAT('MCMF-TEST-', @tid, '-%');
 
 INSERT INTO `order_item` (`order_id`, `product_id`, `product_name`, `product_image`, `product_price`, `quantity`, `subtotal`)
 SELECT
@@ -213,15 +211,15 @@ SELECT
   p.`price`
 FROM `order_info` o
 JOIN `product_info` p ON p.`id` = IF(o.`shop_id` = @shop_beijing, 6, 2)
-WHERE o.`order_no` LIKE CONCAT('MCMF-TEST-', @tid, '-%') COLLATE utf8mb4_unicode_ci;
+WHERE o.`order_no` LIKE CONCAT('MCMF-TEST-', @tid, '-%');
 
 SELECT CONCAT(
   'MCMF: inserted ',
-  (SELECT COUNT(*) FROM `order_info` WHERE `order_no` LIKE CONCAT('MCMF-TEST-', @tid, '-%') COLLATE utf8mb4_unicode_ci),
+  (SELECT COUNT(*) FROM `order_info` WHERE `order_no` LIKE CONCAT('MCMF-TEST-', @tid, '-%')),
   ' orders, ',
   (SELECT COUNT(*) FROM `dispatch_pool` dp
      INNER JOIN `order_info` o ON dp.`order_id` = o.`id`
-     WHERE o.`order_no` LIKE CONCAT('MCMF-TEST-', @tid, '-%') COLLATE utf8mb4_unicode_ci),
+     WHERE o.`order_no` LIKE CONCAT('MCMF-TEST-', @tid, '-%')),
   ' dispatch_pool entries (status=0 揽收中).',
   ' Shanghai shop=', @shop_shanghai, ' WH=', @wh_shanghai,
   '; Beijing shop=', @shop_beijing, ' WH=', @wh_beijing, ' (进京有机果汁 id=6).',

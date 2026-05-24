@@ -1,6 +1,5 @@
 package com.fm.logistics.mq;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -9,12 +8,11 @@ import lombok.NoArgsConstructor;
  * logistics-service → driver-service
  *
  * 复用于两种场景（通过 segmentType 区分）：
- *   segmentType=1：干线路线 — createBatch 后立即发送，通知 driver-service 创建干线待接单配送记录
- *   segmentType=2：末端路线 — 干线到达 Hub 后发送，通知 driver-service 创建末端待接单配送记录
+ *   segmentType=1：干线路线 — createBatch 后立即发送，通知 driver-service 创建干线配送记录
+ *   segmentType=2：末端路线 — 干线到达 Hub 后发送，通知 driver-service 创建末端配送记录
  */
 @Data
 @NoArgsConstructor
-@AllArgsConstructor
 public class LastMileActivateMessage {
     /** 路线ID */
     private Long routeId;
@@ -36,4 +34,10 @@ public class LastMileActivateMessage {
     private String receiverPhone;
     /** 路线段类型：1=干线 2=末端；默认 2 保持兼容 */
     private Integer segmentType;
+
+    /**
+     * 管理员预分配的司机ID（非空时 driver-service 直接建已接单(1)记录，跳过待接单大厅）
+     * null 表示走原有待接单流程
+     */
+    private Long preAssignedDriverId;
 }

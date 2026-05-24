@@ -55,7 +55,7 @@ public class OutboundOrderController {
         return Result.success(outboundOrderService.startProcessing(id));
     }
 
-    @Operation(summary = "完成出库（扣减库存）")
+    @Operation(summary = "完成出库（扣减库存；SALES_ORDER 类型仅更新拣货库位，仓级库存已在下单时扣减）")
     @PutMapping("/{id}/complete")
     public Result<OutboundOrder> complete(@PathVariable Long id) {
         return Result.success(outboundOrderService.complete(id));

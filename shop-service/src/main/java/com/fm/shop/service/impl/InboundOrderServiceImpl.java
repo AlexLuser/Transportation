@@ -74,7 +74,7 @@ public class InboundOrderServiceImpl extends ServiceImpl<InboundOrderMapper, Inb
                 stockService.addStock(order.getWarehouseId(), item.getProductId(), item.getActualQty());
                 // 更新库位占用
                 if (item.getLocationId() != null) {
-                    locationService.updateStock(item.getLocationId(), item.getActualQty());
+                    locationService.adjustStock(item.getLocationId(), order.getWarehouseId(), item.getActualQty());
                 }
             }
         }

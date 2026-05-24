@@ -134,7 +134,7 @@ public class LogisticsBatchServiceImpl implements LogisticsBatchService {
         batchMapper.insert(batch);
         log.info("[Batch] 批次创建，batchId={}, batchNo={}", batch.getId(), batch.getBatchNo());
 
-        // ── 4. 创建干线路线（仓库 → Hub，segment_type=1）────────────
+        // ── 4. 创建干线路线（仓库/全国Hub → 城市Hub，segment_type=1）────────────
         LogisticsRoute trunkRoute = null;
         if (useHub) {
             CreateRouteRequestDTO trunkReq = new CreateRouteRequestDTO();
@@ -157,18 +157,17 @@ public class LogisticsBatchServiceImpl implements LogisticsBatchService {
             batchMapper.updateById(batch);
             log.info("[Batch] 干线路线创建，routeId={}", trunkRoute.getId());
 
-            // 通知 driver-service 创建干线待接单配送记录（出现在待接单大厅）
-            LastMileActivateMessage trunkMsg = new LastMileActivateMessage(
-                    trunkRoute.getId(),
-                    null,                        // 干线无具体订单
-                    batch.getId(),
-                    hub.getId(),
-                    hub.getAddress(),
-                    hub.getLatitude(),
-                    hub.getLongitude(),
-                    null, null,
-                    1                            // segmentType=1 干线
-            );
+            // 通知 driver-service 创建干线配送记录
+            LastMileActivateMessage trunkMsg = new LastMileActivateMessage();
+            trunkMsg.setRouteId(trunkRoute.getId());
+            trunkMsg.setOrderId(null);              // 干线无具体订单
+            trunkMsg.setBatchId(batch.getId());
+            trunkMsg.setHubId(hub.getId());
+            trunkMsg.setEndAddress(hub.getAddress());
+            trunkMsg.setEndLat(hub.getLatitude());
+            trunkMsg.setEndLng(hub.getLongitude());
+            trunkMsg.setSegmentType(1);             // 干线
+            trunkMsg.setPreAssignedDriverId(null);
             rabbitTemplate.convertAndSend(
                     RabbitMQConfig.EXCHANGE,
                     RabbitMQConfig.ROUTING_LAST_MILE_ACTIVATE,
@@ -194,16 +193,15 @@ public class LogisticsBatchServiceImpl implements LogisticsBatchService {
         List<String> orderedNames = vrpResult.getOrderedReceiverNames();
         List<String> orderedPhones = vrpResult.getOrderedReceiverPhones();
 
-        // 跨城到达批次：包裹已在全国 Hub（中转站），末端路线始终从全国 Hub 出发，
-        // 不受本地分拨 Hub 影响（本地 Hub 仅用于批次管理/干线调度，不作为末端起点）。
+        // isCrossCity 仅表示货物来自全国 Hub（干线起点为全国 Hub），不影响末端是否经内部分拨。
+        // 末端起点由 useHub 统一决定：
+        //   useHub=true  → 始终经城市内 logistics_hub（分拨中心），无论跨城与否
+        //   useHub=false → 直接从货源地（仓库或全国 Hub）出发，不经内部分拨
         boolean isCrossCity = Boolean.TRUE.equals(requestDTO.getIsCrossCity());
-        String lastMileStartAddress = isCrossCity ? requestDTO.getWarehouseAddress()
-                                    : (useHub ? hub.getAddress() : requestDTO.getWarehouseAddress());
-        Double lastMileStartLat     = isCrossCity ? requestDTO.getWarehouseLat()
-                                    : (useHub ? hub.getLatitude()  : requestDTO.getWarehouseLat());
-        Double lastMileStartLng     = isCrossCity ? requestDTO.getWarehouseLng()
-                                    : (useHub ? hub.getLongitude() : requestDTO.getWarehouseLng());
-        // 跨城到达时 segType=2（末端配送，起点为中转站），普通批次保持原逻辑
+        String lastMileStartAddress = useHub ? hub.getAddress() : requestDTO.getWarehouseAddress();
+        Double lastMileStartLat     = useHub ? hub.getLatitude()  : requestDTO.getWarehouseLat();
+        Double lastMileStartLng     = useHub ? hub.getLongitude() : requestDTO.getWarehouseLng();
+        // 经内部 Hub 或跨城到达时均为 segment_type=2（末端配送）；直送为 0
         int    segType = (useHub || isCrossCity) ? 2 : 0;
 
         // a. 构建 StopInfo 列表（保留 VRP 全局顺序）
@@ -274,8 +272,9 @@ public class LogisticsBatchServiceImpl implements LogisticsBatchService {
             req.setStopCount(stopCount);
             req.setWaypoints(stopCount > 1 ? wpJson.toString() : null);
             req.setPlannedShipTime(requestDTO.getPlannedShipTime());
-            // 跨城到达：虽然 segType=2，但路线立即可出发（全国Hub已到达），不等激活事件
-            req.setCrossCityDirect(isCrossCity);
+            // Hub 批次（含跨城）：末端路线始终从 routeStatus=-1 开始，等干线到达 Hub 后由 activateLastMileRoutes 激活
+            // 直送批次（!useHub）才设为 true（路线立即可出发）
+            req.setCrossCityDirect(!useHub);
 
             LogisticsRoute groupRoute = routeService.createSegmentRoute(req);
             lastMileRoutes.add(groupRoute);
@@ -309,17 +308,16 @@ public class LogisticsBatchServiceImpl implements LogisticsBatchService {
                 String displayAddr = stopCount > 1
                         ? "共" + stopCount + "个停靠点，终点：" + route.getEndAddress()
                         : route.getEndAddress();
-                LastMileActivateMessage msg = new LastMileActivateMessage(
-                        route.getId(),
-                        route.getOrderId(),   // 多停靠时为 null
-                        batch.getId(),
-                        null,                 // 无中转站
-                        displayAddr,
-                        route.getEndLatitude(),
-                        route.getEndLongitude(),
-                        null, null,
-                        2                     // driver-service 侧仍作末端配送展示
-                );
+                LastMileActivateMessage msg = new LastMileActivateMessage();
+                msg.setRouteId(route.getId());
+                msg.setOrderId(route.getOrderId());     // 多停靠时为 null
+                msg.setBatchId(batch.getId());
+                msg.setHubId(null);                     // 直送无中转站
+                msg.setEndAddress(displayAddr);
+                msg.setEndLat(route.getEndLatitude());
+                msg.setEndLng(route.getEndLongitude());
+                msg.setSegmentType(2);
+                msg.setPreAssignedDriverId(route.getDriverId()); // 管理员预分配
                 rabbitTemplate.convertAndSend(
                         RabbitMQConfig.EXCHANGE,
                         RabbitMQConfig.ROUTING_LAST_MILE_ACTIVATE,
@@ -450,36 +448,39 @@ public class LogisticsBatchServiceImpl implements LogisticsBatchService {
                         .eq(LogisticsRoute::getSegmentType, 2)
                         .eq(LogisticsRoute::getRouteStatus, -1));
 
+        log.info("[DEBUG][activateLastMileRoutes] batchId={}, 找到 {} 条待激活末端路线", batchId, lastMileRoutes.size());
+
         for (LogisticsRoute route : lastMileRoutes) {
+            log.info("[DEBUG][activateLastMileRoutes] 处理路线 routeId={}, segmentType={}, routeStatus={}, driverId={}",
+                    route.getId(), route.getSegmentType(), route.getRouteStatus(), route.getDriverId());
+
             // 激活路线：-1 → 0（待出发）
             route.setRouteStatus(0);
             routeMapper.updateById(route);
 
-            // 通知 driver-service 创建末端配送单
-            // 多停靠末端路线（stop_count>1）的 orderId=null，endAddress=最后一停靠点地址
             int stopCount = route.getStopCount() != null ? route.getStopCount() : 1;
             String displayAddr = stopCount > 1
                     ? "共" + stopCount + "个停靠点，终点：" + route.getEndAddress()
                     : route.getEndAddress();
 
-            LastMileActivateMessage msg = new LastMileActivateMessage(
-                    route.getId(),
-                    route.getOrderId(),         // 多停靠时为 null
-                    batchId,
-                    route.getHubId(),
-                    displayAddr,
-                    route.getEndLatitude(),
-                    route.getEndLongitude(),
-                    null, null,                 // 多停靠无单一收货人，司机看 waypoints
-                    2                           // segmentType=2 末端
-            );
+            LastMileActivateMessage msg = new LastMileActivateMessage();
+            msg.setRouteId(route.getId());
+            msg.setOrderId(route.getOrderId());
+            msg.setBatchId(batchId);
+            msg.setHubId(route.getHubId());
+            msg.setEndAddress(displayAddr);
+            msg.setEndLat(route.getEndLatitude());
+            msg.setEndLng(route.getEndLongitude());
+            msg.setSegmentType(2);
+            msg.setPreAssignedDriverId(route.getDriverId());
+
+            log.info("[DEBUG][activateLastMileRoutes] 发送 MQ #14: routeId={}, preAssignedDriverId={}",
+                    route.getId(), route.getDriverId());
             rabbitTemplate.convertAndSend(
                     RabbitMQConfig.EXCHANGE,
                     RabbitMQConfig.ROUTING_LAST_MILE_ACTIVATE,
                     msg
             );
-            log.info("[Batch] 末端路线激活，routeId={}, stopCount={}, orderId={}",
-                    route.getId(), stopCount, route.getOrderId());
         }
 
         // 更新批次状态 → 末端派送中(3)

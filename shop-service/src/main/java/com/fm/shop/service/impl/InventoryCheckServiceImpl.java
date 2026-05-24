@@ -3,15 +3,17 @@ package com.fm.shop.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fm.common.exception.BusinessException;
+import com.fm.common.result.ResultCode;
 import com.fm.shop.entity.InventoryCheck;
 import com.fm.shop.entity.InventoryCheckItem;
-import com.fm.shop.entity.WarehouseLocation;
+import com.fm.shop.entity.Product;
 import com.fm.shop.entity.WarehouseProduct;
 import com.fm.shop.mapper.InventoryCheckItemMapper;
 import com.fm.shop.mapper.InventoryCheckMapper;
 import com.fm.shop.service.InventoryCheckService;
+import com.fm.shop.service.ProductService;
 import com.fm.shop.service.StockService;
-import com.fm.shop.service.WarehouseLocationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 
 @Service
@@ -30,10 +33,13 @@ public class InventoryCheckServiceImpl extends ServiceImpl<InventoryCheckMapper,
     @Autowired
     private InventoryCheckItemMapper itemMapper;
     @Autowired
-    private WarehouseLocationService locationService;
-    @Autowired
     private StockService stockService;
+    @Autowired
+    private ProductService productService;
 
+    /**
+     * 按仓库账面库存生成盘点明细（FULL/ZONE/DYNAMIC 均以此为准；分区盘时 zoneCode 仅作业务备注，仓内库存未区分到库位）。
+     */
     @Override
     @Transactional
     public InventoryCheck create(InventoryCheck check) {
@@ -41,31 +47,24 @@ public class InventoryCheckServiceImpl extends ServiceImpl<InventoryCheckMapper,
         check.setStatus("PENDING");
         checkMapper.insert(check);
 
-        // 自动生成盘点明细：按库位和库存生成条目
-        List<WarehouseLocation> locations;
-        if (check.getZoneCode() != null) {
-            locations = locationService.getByZone(check.getWarehouseId(), check.getZoneCode());
-        } else {
-            locations = locationService.getByWarehouseId(check.getWarehouseId());
-        }
-
-        for (WarehouseLocation loc : locations) {
-            List<WarehouseProduct> stocks = stockService.getStockByWarehouseId(check.getWarehouseId());
-            for (WarehouseProduct wp : stocks) {
-                if (check.getShopId() != null && !check.getShopId().equals(wp.getShopId())) {
-                    continue;
-                }
-                InventoryCheckItem item = new InventoryCheckItem();
-                item.setCheckId(check.getId());
-                item.setLocationId(loc.getId());
-                item.setProductId(wp.getProductId());
-                item.setShopId(wp.getShopId());
-                item.setProductName("商品#" + wp.getProductId());
-                item.setSystemQty(wp.getStock() != null ? wp.getStock() : 0);
-                item.setStatus("PENDING");
-                itemMapper.insert(item);
-                break; // 每个库位对应一条主要库存明细（简化实现）
+        List<WarehouseProduct> stocks = stockService.getStockByWarehouseId(check.getWarehouseId());
+        for (WarehouseProduct wp : stocks) {
+            Product p = wp.getProductId() != null ? productService.getProductById(wp.getProductId()) : null;
+            Long effectiveShopId = wp.getShopId() != null ? wp.getShopId() : (p != null ? p.getShopId() : null);
+            if (check.getShopId() != null && !check.getShopId().equals(effectiveShopId)) {
+                continue;
             }
+            InventoryCheckItem item = new InventoryCheckItem();
+            item.setCheckId(check.getId());
+            item.setLocationId(null);
+            item.setProductId(wp.getProductId());
+            item.setShopId(effectiveShopId);
+            item.setProductName(p != null && p.getProductName() != null
+                    ? p.getProductName()
+                    : ("商品#" + wp.getProductId()));
+            item.setSystemQty(wp.getStock() != null ? wp.getStock() : 0);
+            item.setStatus("PENDING");
+            itemMapper.insert(item);
         }
 
         return check;
@@ -84,11 +83,26 @@ public class InventoryCheckServiceImpl extends ServiceImpl<InventoryCheckMapper,
 
     @Override
     public InventoryCheckItem submitItemResult(Long checkId, Long itemId, Integer actualQty) {
+        if (actualQty == null || actualQty < 0) {
+            throw new BusinessException(ResultCode.FAIL, "实盘数量无效");
+        }
         InventoryCheckItem item = itemMapper.selectById(itemId);
-        if (item == null || !item.getCheckId().equals(checkId)) return null;
+        if (item == null || !item.getCheckId().equals(checkId)) {
+            return null;
+        }
         item.setActualQty(actualQty);
-        item.setStatus(actualQty.equals(item.getSystemQty()) ? "COUNTED" : "DIFF");
+        item.setStatus(Objects.equals(actualQty, item.getSystemQty()) ? "COUNTED" : "DIFF");
         itemMapper.updateById(item);
+
+        InventoryCheck check = checkMapper.selectById(checkId);
+        if (check != null && "PROCESSING".equals(check.getStatus())) {
+            List<InventoryCheckItem> all = getItems(checkId);
+            boolean allFilled = all.stream().allMatch(i -> i.getActualQty() != null);
+            if (allFilled) {
+                check.setStatus("CONFIRMING");
+                checkMapper.updateById(check);
+            }
+        }
         return item;
     }
 
@@ -96,12 +110,22 @@ public class InventoryCheckServiceImpl extends ServiceImpl<InventoryCheckMapper,
     @Transactional
     public InventoryCheck confirmAndAdjust(Long checkId) {
         InventoryCheck check = checkMapper.selectById(checkId);
-        if (check == null) return null;
+        if (check == null) {
+            return null;
+        }
+        if ("DONE".equals(check.getStatus())) {
+            return check;
+        }
+        if (!"CONFIRMING".equals(check.getStatus()) && !"PROCESSING".equals(check.getStatus())) {
+            throw new BusinessException(ResultCode.FAIL, "当前盘点单状态不可确认");
+        }
 
         List<InventoryCheckItem> items = getItems(checkId);
         for (InventoryCheckItem item : items) {
-            if ("DIFF".equals(item.getStatus()) && item.getActualQty() != null) {
-                // 以实盘数量为准，强制覆盖库存
+            if (item.getActualQty() == null) {
+                continue;
+            }
+            if (!Objects.equals(item.getSystemQty(), item.getActualQty())) {
                 stockService.updateStock(check.getWarehouseId(), item.getProductId(), item.getActualQty());
             }
         }

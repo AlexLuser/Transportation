@@ -19,47 +19,30 @@ public class ShipmentRoutingServiceImpl implements ShipmentRoutingService {
     private final NationalHubMapper nationalHubMapper;
 
     @Override
-    public HubAssignmentDTO assignHubs(Long warehouseId,
-                                       Double startLat, Double startLng,
-                                       Double endLat, Double endLng) {
-        Long originHubId;
-
-        if (warehouseId != null) {
-            // ── 商户订单：通过仓库确定 originHub ──
-            Warehouse warehouse = warehouseMapper.selectById(warehouseId);
-            if (warehouse == null) {
-                throw new IllegalArgumentException("仓库不存在: " + warehouseId);
-            }
-            originHubId = warehouse.getAffiliatedHubId();
-            if (originHubId == null) {
-                if (warehouse.getLatitude() != null && warehouse.getLongitude() != null) {
-                    NationalHub nearest = nationalHubMapper.selectNearestCityHub(
-                            warehouse.getLatitude(), warehouse.getLongitude());
-                    if (nearest != null) {
-                        originHubId = nearest.getId();
-                        log.warn("[ShipmentRouting] 仓库{}未配置affiliatedHubId，按坐标找到最近Hub: {}",
-                                warehouseId, nearest.getName());
-                    }
-                }
-            }
-            if (originHubId == null) {
-                throw new IllegalStateException("无法确定发货Hub，请为仓库配置 affiliated_hub_id");
-            }
-            log.info("[ShipmentRouting] 商户订单 仓库{}→originHub={}", warehouseId, originHubId);
-        } else {
-            // ── 个人寄件：通过发件人坐标找最近城市 Hub ──
-            if (startLat == null || startLng == null) {
-                throw new IllegalArgumentException("个人寄件缺少发件人坐标（startLat/startLng）");
-            }
-            NationalHub originHub = nationalHubMapper.selectNearestCityHub(startLat, startLng);
-            if (originHub == null) {
-                throw new IllegalStateException("无法根据发件人坐标找到城市Hub，请检查 national_hub 数据");
-            }
-            originHubId = originHub.getId();
-            log.info("[ShipmentRouting] 个人寄件 发件坐标({},{})→originHub={}", startLat, startLng, originHub.getName());
+    public HubAssignmentDTO assignHubs(Long warehouseId, Double endLat, Double endLng) {
+        // Step1: 查仓库，获取 affiliatedHubId
+        Warehouse warehouse = warehouseMapper.selectById(warehouseId);
+        if (warehouse == null) {
+            throw new IllegalArgumentException("仓库不存在: " + warehouseId);
         }
 
-        // ── 收货城市 Hub ──
+        Long originHubId = warehouse.getAffiliatedHubId();
+        if (originHubId == null) {
+            // 兜底：按坐标找最近城市Hub
+            if (warehouse.getLatitude() != null && warehouse.getLongitude() != null) {
+                NationalHub nearest = nationalHubMapper.selectNearestCityHub(
+                        warehouse.getLatitude(), warehouse.getLongitude());
+                if (nearest != null) {
+                    originHubId = nearest.getId();
+                    log.warn("[ShipmentRouting] 仓库{}未配置affiliatedHubId，按坐标找到最近Hub: {}", warehouseId, nearest.getName());
+                }
+            }
+        }
+        if (originHubId == null) {
+            throw new IllegalStateException("无法确定发货Hub，请为仓库配置 affiliated_hub_id");
+        }
+
+        // Step2: 按收货坐标找最近城市Hub
         if (endLat == null || endLng == null) {
             throw new IllegalArgumentException("收货坐标不能为空");
         }
@@ -70,7 +53,8 @@ public class ShipmentRoutingServiceImpl implements ShipmentRoutingService {
         Long destHubId = destHub.getId();
 
         boolean crossCity = !originHubId.equals(destHubId);
-        log.info("[ShipmentRouting] 收货坐标({},{})→destHub={}, crossCity={}", endLat, endLng, destHub.getName(), crossCity);
+        log.info("[ShipmentRouting] 仓库{}→originHub={}, 收货坐标({},{})→destHub={}, crossCity={}",
+                warehouseId, originHubId, endLat, endLng, destHubId, crossCity);
 
         HubAssignmentDTO dto = new HubAssignmentDTO();
         dto.setOriginHubId(originHubId);

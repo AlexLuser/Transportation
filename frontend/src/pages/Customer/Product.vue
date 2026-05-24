@@ -4,20 +4,20 @@
         <div class="search-bar">
             <el-input
                 v-model="keyword"
-                placeholder="搜索货物名称"
+                placeholder="搜索商品名称"
                 clearable
                 class="search-input"
                 @keyup.enter="handleSearch"
             />
             <el-select v-model="sortType" class="sort-select" @change="handleSearch">
-                <el-option label="最新发布" value="createTime_desc" />
-                <el-option label="运费最低" value="price_asc" />
-                <el-option label="发货量最高" value="salesCount_desc" />
+                <el-option label="最新上架" value="createTime_desc" />
+                <el-option label="价格最低" value="price_asc" />
+                <el-option label="销量最高" value="salesCount_desc" />
             </el-select>
             <el-button type="primary" @click="handleSearch">搜索</el-button>
         </div>
 
-        <!-- 货物列表 -->
+        <!-- 商品列表 -->
         <el-row :gutter="16" class="product-grid">
             <el-col :span="6" v-for="product in products" :key="product.id">
                 <el-card class="product-card" shadow="hover">
@@ -37,12 +37,15 @@
                             {{ product.productName }}
                         </div>
                         <div class="product-price-row">
-                            <span class="price">申报价值 ¥{{ product.price }}</span>
+                            <span class="price">¥{{ product.price }}</span>
+                            <span class="original-price" v-if="product.originalPrice && product.originalPrice > product.price">
+                                ¥{{ product.originalPrice }}
+                            </span>
                         </div>
-                        <div class="product-sales">已发 {{ product.salesCount ?? 0 }} 件</div>
+                        <div class="product-sales">已售 {{ product.salesCount ?? 0 }} 件</div>
                         <div class="product-actions">
                             <el-button size="small" @click="openDetail(product)">查看详情</el-button>
-                            <el-button size="small" type="primary" @click="goToOrder(product)">发起寄件</el-button>
+                            <el-button size="small" type="primary" @click="goToOrder(product)">立即购买</el-button>
                         </div>
                     </div>
                 </el-card>
@@ -50,7 +53,7 @@
         </el-row>
 
         <!-- 空状态 -->
-        <el-empty v-if="products.length === 0" description="暂无货物信息" class="empty-state" />
+        <el-empty v-if="products.length === 0" description="暂无商品" class="empty-state" />
 
         <!-- 分页 -->
         <div class="pagination-bar">
@@ -65,7 +68,7 @@
             />
         </div>
 
-        <!-- 货物详情弹窗 -->
+        <!-- 商品详情弹窗 -->
         <el-dialog
             v-model="dialogVisible"
             width="780px"
@@ -91,19 +94,22 @@
                 <!-- 右栏：详情 -->
                 <div class="dialog-right">
                     <div class="dialog-price-row">
-                        <span class="dialog-price-label">申报价值</span>
                         <span class="dialog-price">¥{{ selectedProduct.price }}</span>
+                        <span class="dialog-original-price"
+                            v-if="selectedProduct.originalPrice && selectedProduct.originalPrice > selectedProduct.price">
+                            原价 ¥{{ selectedProduct.originalPrice }}
+                        </span>
                     </div>
 
                     <el-descriptions :column="1" border class="dialog-desc">
-                        <el-descriptions-item label="货物编码">{{ selectedProduct.productCode ?? '-' }}</el-descriptions-item>
-                        <el-descriptions-item label="计量单位">{{ selectedProduct.unit ?? '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="商品编码">{{ selectedProduct.productCode ?? '-' }}</el-descriptions-item>
+                        <el-descriptions-item label="单位">{{ selectedProduct.unit ?? '-' }}</el-descriptions-item>
                         <el-descriptions-item label="重量">{{ selectedProduct.weight ? selectedProduct.weight + ' kg' : '-' }}</el-descriptions-item>
-                        <el-descriptions-item label="已发件数">{{ selectedProduct.salesCount ?? 0 }} 件</el-descriptions-item>
+                        <el-descriptions-item label="销量">{{ selectedProduct.salesCount ?? 0 }} 件</el-descriptions-item>
                     </el-descriptions>
 
                     <div class="dialog-description" v-if="selectedProduct.description">
-                        <div class="desc-label">货物描述</div>
+                        <div class="desc-label">商品描述</div>
                         <p>{{ selectedProduct.description }}</p>
                     </div>
                 </div>
@@ -111,8 +117,8 @@
 
             <template #footer>
                 <div class="dialog-footer">
-                    <el-button @click="goToShop(selectedProduct)">查看货主信息</el-button>
-                    <el-button type="primary" @click="goToOrder(selectedProduct)">发起寄件</el-button>
+                    <el-button @click="goToShop(selectedProduct)">进入商家页面</el-button>
+                    <el-button type="primary" @click="goToOrder(selectedProduct)">立即购买</el-button>
                 </div>
             </template>
         </el-dialog>
@@ -183,12 +189,12 @@
 
     const goToOrder = (product: any) => {
         dialogVisible.value = false;
-        router.push({ path: '/sender/home/catalog-shipment', query: { productId: product.id } });
+        router.push({ path: '/customer/home/shop-order', query: { productId: product.id } });
     };
 
     const goToShop = (product: any) => {
         dialogVisible.value = false;
-        router.push({ path: `/sender/home/merchant/${product.shopId}` });
+        router.push({ path: `/customer/home/shop/${product.shopId}` });
     };
 
     onMounted(() => {
@@ -275,9 +281,15 @@
     }
 
     .price {
-        font-size: 14px;
-        font-weight: 500;
-        color: #409eff;
+        font-size: 18px;
+        font-weight: bold;
+        color: #f56c6c;
+    }
+
+    .original-price {
+        font-size: 12px;
+        color: #909399;
+        text-decoration: line-through;
     }
 
     .product-sales {
@@ -331,15 +343,16 @@
         gap: 12px;
     }
 
-    .dialog-price-label {
-        font-size: 14px;
-        color: #606266;
-    }
-
     .dialog-price {
         font-size: 28px;
         font-weight: bold;
-        color: #409eff;
+        color: #f56c6c;
+    }
+
+    .dialog-original-price {
+        font-size: 14px;
+        color: #909399;
+        text-decoration: line-through;
     }
 
     .dialog-desc {

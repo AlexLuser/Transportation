@@ -96,7 +96,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 20
-      start_period: 60s
+      start_period: 120s
 
   # =========================================================
   # 后端微服务层
@@ -108,7 +108,7 @@ services:
       dockerfile: auth-service/Dockerfile
     container_name: transport-auth
     environment:
-      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8"
+      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dspring.cloud.nacos.discovery.fail-fast=false"
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
       SPRING_DATASOURCE_USERNAME: admin
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-12345678}
@@ -130,7 +130,7 @@ services:
       dockerfile: user-service/Dockerfile
     container_name: transport-user
     environment:
-      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8"
+      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dspring.cloud.nacos.discovery.fail-fast=false"
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
       SPRING_DATASOURCE_USERNAME: admin
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-12345678}
@@ -152,7 +152,7 @@ services:
       dockerfile: customer-service/Dockerfile
     container_name: transport-customer
     environment:
-      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8"
+      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dspring.cloud.nacos.discovery.fail-fast=false"
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
       SPRING_DATASOURCE_USERNAME: admin
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-12345678}
@@ -178,7 +178,7 @@ services:
       dockerfile: shop-service/Dockerfile
     container_name: transport-shop
     environment:
-      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8"
+      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dspring.cloud.nacos.discovery.fail-fast=false"
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
       SPRING_DATASOURCE_USERNAME: admin
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-12345678}
@@ -207,7 +207,7 @@ services:
       dockerfile: order-service/Dockerfile
     container_name: transport-order
     environment:
-      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8"
+      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dspring.cloud.nacos.discovery.fail-fast=false"
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
       SPRING_DATASOURCE_USERNAME: admin
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-12345678}
@@ -232,7 +232,7 @@ services:
       dockerfile: driver-service/Dockerfile
     container_name: transport-driver
     environment:
-      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8"
+      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dspring.cloud.nacos.discovery.fail-fast=false"
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
       SPRING_DATASOURCE_USERNAME: admin
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-12345678}
@@ -261,7 +261,7 @@ services:
       dockerfile: logistics-service/Dockerfile
     container_name: transport-logistics
     environment:
-      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8"
+      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dspring.cloud.nacos.discovery.fail-fast=false"
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
       SPRING_DATASOURCE_USERNAME: admin
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-12345678}
@@ -294,7 +294,7 @@ services:
       dockerfile: gateway-service/Dockerfile
     container_name: transport-gateway
     environment:
-      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8"
+      JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dspring.cloud.nacos.discovery.fail-fast=false"
       SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
     ports:
       - "8090:8090"

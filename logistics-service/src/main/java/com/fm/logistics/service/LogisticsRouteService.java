@@ -49,6 +49,18 @@ public interface LogisticsRouteService {
     List<LogisticsRoute> getRoutesByBatchId(Long batchId);
 
     /**
+     * 管理员预分配末端路线司机
+     * 将 driverId 写入 logistics_route（routeStatus=-1 的末端路线），
+     * 激活时 driver-service 将自动创建已接单记录。
+     */
+    void preAssignDriver(Long routeId, Long driverId);
+
+    /**
+     * 查询司机的预调度路线（segmentType=2, routeStatus=-1, driverId=X）
+     */
+    List<LogisticsRoute> getPreDispatchedRoutes(Long driverId);
+
+    /**
      * 查询订单的完整物流全程（按时间顺序返回所有路线段）。
      * <p>
      * 包含：

@@ -3,19 +3,19 @@
         <el-card shadow="never" class="main-card" v-loading="loadingList">
             <template #header>
                 <div class="card-head">
-                    <span class="title">末端配送路线</span>
+                    <span class="title">配送路线</span>
                     <div v-if="inProgress.length" class="head-tools">
                         <span class="hint">路线由系统实时生成</span>
                         <el-select
                             v-model="selectedDeliveryId"
-                            placeholder="选择进行中的配送任务"
+                            placeholder="选择进行中的配送"
                             style="width: 220px"
                             @change="loadRoute"
                         >
                             <el-option
                                 v-for="d in inProgress"
                                 :key="d.id"
-                                :label="d.orderId ? `配送任务 #${d.orderId}` : `配送任务 #${d.id}`"
+                                :label="d.segmentType === 1 ? `干线任务 #${d.id}` : d.orderId ? `末端配送 #${d.orderId}` : `末端任务 #${d.id}`"
                                 :value="d.id"
                             />
                         </el-select>
@@ -23,8 +23,8 @@
                 </div>
             </template>
 
-            <el-empty v-if="!loadingList && !inProgress.length" description="暂无进行中的配送任务，承接任务后可在此查看计划路线">
-                <el-button type="primary" @click="$router.push('/driver/home/deliveries')">去配送任务</el-button>
+            <el-empty v-if="!loadingList && !inProgress.length" description="暂无进行中的配送，接单后可在此查看计划路线">
+                <el-button type="primary" @click="$router.push('/driver/home/deliveries')">去配送管理</el-button>
             </el-empty>
 
             <template v-else-if="selectedDeliveryId">
@@ -107,7 +107,7 @@
     const loadingList = ref(false);
     const loadingRoute = ref(false);
     const inProgress = ref<any[]>([]);
-    /** 以 delivery.id 作为 select 的唯一标识，避免多停靠任务 orderId=null 的歧义 */
+    /** 以 delivery.id 作为 select 的唯一标识，避免干线任务 orderId=null 的歧义 */
     const selectedDeliveryId = ref<number | null>(null);
     const routeDetail = ref<any>(null);
     const routeError = ref('');
@@ -155,7 +155,7 @@
                 // 普通末端路线：按订单 ID 查（支持 stopSequence 等扩展字段）
                 res = await getRouteByOrderId(delivery.orderId);
             } else {
-                // 多停靠末端任务：orderId=null，改用 routeId 直接查
+                // 干线任务 / 多停靠末端任务：orderId=null，改用 routeId 直接查
                 res = await getRouteByRouteId(delivery.routeId);
             }
             routeDetail.value = res.data ?? null;
@@ -170,7 +170,7 @@
         loadingList.value = true;
         try {
             const res = await getInProgressDeliveries();
-            inProgress.value = (res.data ?? []).filter((d: any) => d.segmentType !== 1);
+            inProgress.value = res.data ?? [];
             // 优先按 deliveryId 参数预选（Delivery.vue 传过来的）
             const qDid = route.query.deliveryId;
             const qOid = route.query.orderId;

@@ -24,7 +24,7 @@ public class OutboundOrder {
 
     private Long shopId;
 
-    /** 目的类型：DELIVERY=配送出库，TRANSFER=调拨，RETURN=退货 */
+    /** 目的类型：DELIVERY=配送出库，TRANSFER=调拨，RETURN=退货，SALES_ORDER=销售订单发货（仓级库存已在下单时扣减） */
     private String destType;
 
     /** 关联单据ID（订单/调拨单） */

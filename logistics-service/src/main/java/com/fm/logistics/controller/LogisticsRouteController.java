@@ -194,5 +194,48 @@ public class LogisticsRouteController {
         }
         return Result.success(routeService.getRoutesByBatchId(batchId));
     }
+
+    /**
+     * 管理员预分配末端路线司机
+     *
+     * 将 driverId 写入 logistics_route（routeStatus=-1 的末端路线），
+     * 干线到达 Hub 激活时，driver-service 将自动为该司机创建「已接单」配送记录。
+     * 请求体：{"driverId": x}
+     */
+    @Operation(summary = "预分配末端路线司机（管理员）",
+               description = "将司机ID写入末端路线，激活时自动变为该司机的已接单任务")
+    @PutMapping("/{routeId}/pre-assign")
+    public Result<Void> preAssignDriver(
+            @RequestHeader(value = "roleCode", required = false) String roleCode,
+            @Parameter(description = "路线ID") @PathVariable Long routeId,
+            @RequestBody Map<String, Long> body) {
+        if (!"admin".equals(roleCode)) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "仅管理员可预分配路线");
+        }
+        Long driverId = body.get("driverId");
+        if (driverId == null) {
+            return Result.error("driverId 不能为空");
+        }
+        routeService.preAssignDriver(routeId, driverId);
+        return Result.success(null);
+    }
+
+    /**
+     * 查询司机的预调度路线（待激活末端路线）
+     *
+     * 返回 segmentType=2, routeStatus=-1, driverId=X 的路线列表，
+     * 供司机端展示「等待干线到站」的预分配任务。
+     */
+    @Operation(summary = "查询司机预调度路线列表",
+               description = "返回管理员已为该司机预分配但尚未激活的末端路线（routeStatus=-1）")
+    @GetMapping("/pre-dispatched")
+    public Result<List<LogisticsRoute>> getPreDispatchedRoutes(
+            @RequestHeader(value = "userId", required = false) String userIdHeader,
+            @Parameter(description = "司机ID（driver_info.id）") @RequestParam Long driverId) {
+        if (!StringUtils.hasText(userIdHeader)) {
+            throw new BusinessException(ResultCode.UNAUTHORIZED);
+        }
+        return Result.success(routeService.getPreDispatchedRoutes(driverId));
+    }
 }
 

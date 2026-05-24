@@ -5,8 +5,14 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fm.common.geo.AmapGeocodingService;
 import com.fm.common.geo.GeoPoint;
+import com.fm.common.exception.BusinessException;
+import com.fm.common.result.ResultCode;
 import com.fm.shop.entity.Warehouse;
+import com.fm.shop.entity.WarehouseProduct;
+import com.fm.shop.entity.WarehouseShop;
 import com.fm.shop.mapper.WarehouseMapper;
+import com.fm.shop.mapper.WarehouseProductMapper;
+import com.fm.shop.mapper.WarehouseShopMapper;
 import com.fm.shop.service.WarehouseService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
@@ -25,6 +31,12 @@ import java.util.Optional;
 public class WarehouseServiceImpl extends ServiceImpl<WarehouseMapper, Warehouse> implements WarehouseService {
     @Autowired
     private WarehouseMapper warehouseMapper;
+
+    @Autowired
+    private WarehouseProductMapper warehouseProductMapper;
+
+    @Autowired
+    private WarehouseShopMapper warehouseShopMapper;
 
     @Autowired
     private AmapGeocodingService amapGeocodingService;
@@ -48,6 +60,16 @@ public class WarehouseServiceImpl extends ServiceImpl<WarehouseMapper, Warehouse
     })
     public Warehouse saveOrUpdateWarehouse(Warehouse warehouse) {
         Warehouse existing = warehouse.getId() != null ? getWarehouseById(warehouse.getId()) : null;
+        if (warehouse.getCapacity() != null && warehouse.getCapacity() < 0) {
+            throw new BusinessException(ResultCode.FAIL, "仓库容量不能为负数");
+        }
+        if (warehouse.getId() != null && warehouse.getCapacity() != null && warehouse.getCapacity() > 0) {
+            int sum = warehouseProductMapper.sumStockByWarehouse(warehouse.getId());
+            if (sum > warehouse.getCapacity()) {
+                throw new BusinessException(ResultCode.FAIL,
+                        "仓内总库存 " + sum + " 已超过拟定容量 " + warehouse.getCapacity() + "，请先调整库存");
+            }
+        }
         applyGeocode(warehouse, existing);
         if (warehouse.getId() == null) {
             warehouseMapper.insert(warehouse);
@@ -63,6 +85,16 @@ public class WarehouseServiceImpl extends ServiceImpl<WarehouseMapper, Warehouse
         @CacheEvict(value = "warehouseAll",  key = "'all'")
     })
     public boolean updateWarehouseCapacity(Long warehouseId, Integer capacity) {
+        if (capacity != null && capacity < 0) {
+            throw new BusinessException(ResultCode.FAIL, "仓库容量不能为负数");
+        }
+        if (capacity != null && capacity > 0) {
+            int sum = warehouseProductMapper.sumStockByWarehouse(warehouseId);
+            if (sum > capacity) {
+                throw new BusinessException(ResultCode.FAIL,
+                        "当前仓内总库存 " + sum + "，不能将容量调整为 " + capacity);
+            }
+        }
         LambdaUpdateWrapper<Warehouse> wrapper = new LambdaUpdateWrapper<>();
         wrapper.eq(Warehouse::getId, warehouseId).set(Warehouse::getCapacity, capacity);
         return warehouseMapper.update(null, wrapper) > 0;
@@ -74,6 +106,18 @@ public class WarehouseServiceImpl extends ServiceImpl<WarehouseMapper, Warehouse
         @CacheEvict(value = "warehouseAll",  key = "'all'")
     })
     public boolean deleteWarehouse(Long warehouseId) {
+        Long stockRows = warehouseProductMapper.selectCount(new LambdaQueryWrapper<WarehouseProduct>()
+                .eq(WarehouseProduct::getWarehouseId, warehouseId)
+                .gt(WarehouseProduct::getStock, 0));
+        if (stockRows != null && stockRows > 0) {
+            throw new BusinessException(ResultCode.FAIL, "仓库仍存在库存，无法删除");
+        }
+        Long bindings = warehouseShopMapper.selectCount(new LambdaQueryWrapper<WarehouseShop>()
+                .eq(WarehouseShop::getWarehouseId, warehouseId)
+                .eq(WarehouseShop::getStatus, 1));
+        if (bindings != null && bindings > 0) {
+            throw new BusinessException(ResultCode.FAIL, "仓库仍有关联商家，请先解绑后再删除");
+        }
         return warehouseMapper.deleteById(warehouseId) > 0;
     }
 

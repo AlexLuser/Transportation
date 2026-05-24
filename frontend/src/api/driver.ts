@@ -88,11 +88,6 @@ export const updateVehicleStatus = (id: number, status: number) => {
 
 // ==================== 配送订单接口 ====================
 
-/** 获取待接单列表（分页） */
-export const getPendingDeliveries = (params: { current?: number; size?: number }) => {
-    return request({ url: '/drivers/deliveries/pending', method: 'GET', params });
-};
-
 /** 获取我的配送订单列表（分页，支持状态筛选） */
 export const getMyDeliveries = (params: DeliveryPageParams) => {
     return request({ url: '/drivers/deliveries', method: 'GET', params });
@@ -106,15 +101,6 @@ export const getInProgressDeliveries = () => {
 /** 获取配送详情 */
 export const getDeliveryDetail = (id: number) => {
     return request({ url: `/drivers/deliveries/${id}`, method: 'GET' });
-};
-
-/** 接单（可选指定车辆） */
-export const acceptDelivery = (id: number, vehicleId?: number) => {
-    return request({
-        url: `/drivers/deliveries/${id}/accept`,
-        method: 'POST',
-        data: vehicleId ? { vehicleId } : {},
-    });
 };
 
 /** 更新配送状态（status: 2=运输中，3=已送达） */
@@ -147,4 +133,9 @@ export const completeDeliveryStop = (deliveryId: number, orderId: number) => {
 /** 获取末端路线的停靠点列表（含 itemStatus）*/
 export const getRouteStops = (routeId: number) => {
     return request({ url: `/logistics/batches/routes/${routeId}/stops`, method: 'GET' });
+};
+
+/** 获取所有运输员列表（管理员调度选司机用） */
+export const getAllDriversForAdmin = () => {
+    return request({ url: '/drivers/admin/list', method: 'GET' });
 };

@@ -18,15 +18,12 @@ public class ShipmentRoutingController {
     private final ShipmentRoutingService shipmentRoutingService;
 
     /**
-     * 根据发货起点和收货坐标，分配 originHub / destHub
-     * 商户订单传 warehouseId；个人寄件 warehouseId=null，传 startLat/startLng
+     * 根据发货仓库和收货坐标，分配 originHub / destHub
      */
     @PostMapping("/assign-hubs")
     public Result<HubAssignmentDTO> assignHubs(@RequestBody AssignHubsRequestDTO req) {
         HubAssignmentDTO result = shipmentRoutingService.assignHubs(
-                req.getWarehouseId(),
-                req.getStartLat(), req.getStartLng(),
-                req.getEndLat(), req.getEndLng());
+                req.getWarehouseId(), req.getEndLat(), req.getEndLng());
         return Result.success(result);
     }
 }

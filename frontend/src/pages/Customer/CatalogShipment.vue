@@ -108,8 +108,8 @@
     const fetchProduct = async () => {
         const productId = route.query.productId;
         if (!productId) {
-            ElMessage.error('缺少承运物参数，请从承运物目录重新选择');
-            router.replace('/sender/home/products');
+            ElMessage.error('缺少货物参数，请从货物目录重新选择');
+            router.replace('/customer/home/products');
             return;
         }
         const res = await getMallProductDetail(Number(productId));
@@ -137,13 +137,13 @@
                 remark: remark.value
             });
             ElMessage.success('寄件单已提交，请前往运单列表支付');
-            router.push('/sender/home/orders');
+            router.push('/customer/home/orders');
         } finally {
             submitting.value = false;
         }
     };
 
-    const goToProfile = () => router.push('/sender/home/profile');
+    const goToProfile = () => router.push('/customer/home/profile');
 
     onMounted(async () => {
         loading.value = true;

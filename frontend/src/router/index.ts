@@ -3,8 +3,8 @@ import { useUserStore } from '@/stores/userStore'
 
 export const roleHomeMap: Record<string, string> = {
     admin: '/admin/home',
-    customer: '/sender/home',
-    shop: '/merchant/home',
+    customer: '/customer/home',
+    shop: '/shop/home',
     driver: '/driver/home'
 }
 
@@ -72,10 +72,10 @@ const routes = [
         ]
     },
     {
-        path: '/sender/home',
+        path: '/customer/home',
         component: () => import('@/pages/CustomerHome.vue'),
         meta: {role: 'customer'},
-        redirect: '/sender/home/shipment',
+        redirect: '/customer/home/products',
         children: [
             {
                 path: 'products',
@@ -93,27 +93,22 @@ const routes = [
                 meta: {role: 'customer'}
             },
             {
-                path: 'shipment',
-                component: () => import('@/pages/Customer/CreateShipment.vue'),
+                path: 'shop-order',
+                component: () => import('@/pages/Customer/CreateOrder.vue'),
                 meta: {role: 'customer'}
             },
             {
-                path: 'catalog-shipment',
-                component: () => import('@/pages/Customer/CatalogShipment.vue'),
-                meta: {role: 'customer'}
-            },
-            {
-                path: 'merchant/:id',
+                path: 'shop/:id',
                 component: () => import('@/pages/Customer/ShopPage.vue'),
                 meta: {role: 'customer'}
             }
         ]
     },
     {
-        path: '/merchant/home',
+        path: '/shop/home',
         component: () => import('@/pages/ShopHome.vue'),
         meta: {role: 'shop'},
-        redirect: '/merchant/home/products',
+        redirect: '/shop/home/products',
         children: [
             {
                 path: 'products',

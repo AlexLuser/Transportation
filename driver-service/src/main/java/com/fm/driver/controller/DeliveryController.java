@@ -57,17 +57,6 @@ public class DeliveryController {
         return Result.success(deliveryService.listInProgressDeliveries(driver.getId()));
     }
 
-    @Operation(summary = "获取待接单订单列表", description = "获取待接单的订单列表（分页）")
-    @GetMapping("/pending")
-    public Result<PageResult<OrderDelivery>> getPendingDeliveries(
-            @Parameter(description = "当前页码（从1开始）")
-            @RequestParam(value = "current", defaultValue = "1") Long current,
-            @Parameter(description = "每页大小")
-            @RequestParam(value = "size", defaultValue = "10") Long size) {
-        PageResult<OrderDelivery> pageResult = deliveryService.getPendingDeliveries(current, size);
-        return Result.success(pageResult);
-    }
-    
     /**
      * 获取我的配送订单列表（分页）
      */
@@ -127,43 +116,6 @@ public class DeliveryController {
             }
         }
         
-        return Result.success(delivery);
-    }
-    
-    /**
-     * 接单
-     */
-    @Operation(summary = "接单", description = "接受配送订单")
-    @PostMapping("/{id}/accept")
-    public Result<OrderDelivery> acceptDelivery(
-            @RequestHeader(value = "userId", required = false) String userIdHeader,
-            @Parameter(description = "配送ID", required = true)
-            @PathVariable Long id,
-            @RequestBody(required = false) Map<String, Object> requestBody) {
-        if (!StringUtils.hasText(userIdHeader)) {
-            throw new BusinessException(ResultCode.UNAUTHORIZED);
-        }
-        Long userId = Long.parseLong(userIdHeader);
-        
-        Driver driver = driverService.getDriverByUserId(userId);
-        if (driver == null) {
-            return Result.error("运输员信息不存在，请先完善信息");
-        }
-        
-        Long vehicleId = null;
-        if (requestBody != null && requestBody.containsKey("vehicleId")) {
-            vehicleId = Long.valueOf(requestBody.get("vehicleId").toString());
-        }
-        
-        OrderDelivery delivery = deliveryService.acceptDelivery(id, driver.getId(), vehicleId);
-
-        // 多停靠末端路线（orderId=null，segmentType=2）：接单后逐单通知 order-service → 派送中
-        if (delivery.getOrderId() == null
-                && Integer.valueOf(2).equals(delivery.getSegmentType())
-                && delivery.getRouteId() != null) {
-            updateMultiStopOrdersStatus(delivery.getRouteId(), 3, userIdHeader);
-        }
-
         return Result.success(delivery);
     }
     
@@ -270,68 +222,13 @@ public class DeliveryController {
     }
 
     /**
-     * 司机主动接单附近路线段（智能调度模式）
-     *
-     * 司机从附近路线段大厅中选择一条路线段接单，
-     * 系统直接创建配送记录并绑定路线，无需等待预创建的配送单。
-     */
-    @Operation(summary = "接单路线段（智能调度）",
-               description = "司机从附近路线段列表选择一条路线直接接单")
-    @PostMapping("/accept-segment")
-    public Result<OrderDelivery> acceptSegment(
-            @RequestHeader(value = "userId", required = false) String userIdHeader,
-            @RequestBody Map<String, Object> body) {
-        if (!StringUtils.hasText(userIdHeader)) {
-            throw new BusinessException(ResultCode.UNAUTHORIZED);
-        }
-        Long userId = Long.parseLong(userIdHeader);
-        Driver driver = driverService.getDriverByUserId(userId);
-        if (driver == null) {
-            return Result.error("运输员信息不存在，请先完善信息");
-        }
-
-        Long routeId      = body.get("routeId")     != null ? Long.parseLong(body.get("routeId").toString())     : null;
-        Long vehicleId    = body.get("vehicleId")   != null ? Long.parseLong(body.get("vehicleId").toString())   : null;
-        Long orderId      = body.get("orderId")     != null ? Long.parseLong(body.get("orderId").toString())     : null;
-        Long batchId      = body.get("batchId")     != null ? Long.parseLong(body.get("batchId").toString())     : null;
-        Long hubId        = body.get("hubId")       != null ? Long.parseLong(body.get("hubId").toString())       : null;
-        Integer routeType = body.get("routeType")   != null ? Integer.parseInt(body.get("routeType").toString()) : 0;
-        String startAddr  = body.get("startAddress") != null ? body.get("startAddress").toString() : "";
-        String endAddr    = body.get("endAddress")   != null ? body.get("endAddress").toString()   : "";
-        String recvName   = body.get("receiverName") != null ? body.get("receiverName").toString() : "";
-        String recvPhone  = body.get("receiverPhone")!= null ? body.get("receiverPhone").toString(): "";
-
-        if (routeId == null) {
-            return Result.error("routeId 不能为空");
-        }
-        // 干线(routeType=1)和多停靠末端(routeType=2)的 orderId 允许为 null
-        if (orderId == null && routeType != 1 && routeType != 2) {
-            return Result.error("非干线/多停靠路线的 orderId 不能为空");
-        }
-
-        OrderDelivery delivery = deliveryService.acceptSegment(
-            routeId, driver.getId(), vehicleId,
-            orderId, startAddr, endAddr,
-            recvName, recvPhone,
-            routeType, batchId, hubId
-        );
-
-        // 多停靠末端路线（orderId=null，routeType=2）：接单后逐单通知 order-service → 派送中
-        if (orderId == null && routeType != null && routeType == 2) {
-            updateMultiStopOrdersStatus(routeId, 3, userIdHeader);
-        }
-
-        return Result.success(delivery);
-    }
-
-    /**
      * 干线司机确认到达 Hub 中转站（Hub-and-Spoke 专用）
      *
      * 触发流程：
      *   driver → logistics（MQ #13 HubArrivalMessage）
-     *   logistics → 激活末端路线
-     *   logistics → driver（MQ #14 LastMileActivateMessage × N条）
-     *   driver → 末端配送单进入待接单大厅
+     *   logistics → 激活末端路线（将 routeStatus -1→0）
+     *   logistics → driver（MQ #14 LastMileActivateMessage × N条，携带 preAssignedDriverId）
+     *   driver → 末端配送单自动建为「已接单」状态，出现在对应司机「我的配送」中
      */
     @Operation(summary = "确认到达中转站（干线专用）",
                description = "干线司机到达 Hub 后调用，触发末端配送单创建流程")
@@ -404,6 +301,98 @@ public class DeliveryController {
             return Result.success("本站已送达，全部停靠点完成，配送单已自动关闭");
         }
         return Result.success("本站已送达");
+    }
+
+    // ================================================================
+    //  管理员调度
+    // ================================================================
+
+    /**
+     * 管理员对批次进行一次性调度：指派干线司机 + 预分配末端路线司机
+     *
+     * 请求体（JSON）：
+     * {
+     *   "trunkDriverId": 1,       -- 干线司机ID（必填）
+     *   "trunkVehicleId": 2,      -- 干线车辆ID（可选）
+     *   "lastMileAssignments": [  -- 末端路线预分配（可为空数组）
+     *     {"routeId": 10, "driverId": 3},
+     *     {"routeId": 11, "driverId": 4}
+     *   ]
+     * }
+     *
+     * 流程：
+     *  1. 找到批次的干线 order_delivery（segmentType=1, status=0），指派干线司机（status→1），发 MQ #10 绑路线
+     *  2. 对每条末端路线，调 logistics-service Feign 将 driverId 写入 logistics_route
+     *     → 干线到 Hub 后激活末端路线时，driver-service 自动创建「已接单」记录
+     */
+    @Operation(summary = "管理员调度批次（干线+末端一次性）",
+               description = """
+               管理员为批次指定司机。支持两种模式：
+               1. Hub中转批次（useHub=true）：trunkDriverId 必填；末端路线写入预分配，干线到达 Hub 后自动激活。
+               2. 直接送达批次（useHub=false）：trunkDriverId 可为空；末端配送记录已存在，直接更新司机。
+               """)
+    @PostMapping("/batch/{batchId}/admin-dispatch")
+    public Result<String> adminDispatchBatch(
+            @RequestHeader(value = "roleCode", required = false) String roleCode,
+            @PathVariable Long batchId,
+            @RequestBody Map<String, Object> body) {
+
+        if (!"admin".equals(roleCode)) {
+            throw new BusinessException(ResultCode.FORBIDDEN);
+        }
+
+        Long trunkDriverId  = body.get("trunkDriverId")  != null ? Long.parseLong(body.get("trunkDriverId").toString())  : null;
+        Long trunkVehicleId = body.get("trunkVehicleId") != null ? Long.parseLong(body.get("trunkVehicleId").toString()) : null;
+
+        log.info("[DEBUG][adminDispatchBatch] batchId={}, trunkDriverId={}, trunkVehicleId={}", batchId, trunkDriverId, trunkVehicleId);
+
+        // 1. 指派干线司机（仅 Hub 中转批次有干线，直送批次跳过）
+        if (trunkDriverId != null) {
+            try {
+                deliveryService.adminAssignTrunkDriver(batchId, trunkDriverId, trunkVehicleId);
+                log.info("[DEBUG][adminDispatchBatch] 干线司机指派成功");
+            } catch (Exception e) {
+                log.error("[DEBUG][adminDispatchBatch] 干线司机指派失败: {}", e.getMessage(), e);
+                return Result.error("干线司机指派失败：" + e.getMessage());
+            }
+        }
+
+        // 2. 末端路线司机分配
+        @SuppressWarnings("unchecked")
+        java.util.List<Map<String, Object>> assignments =
+                body.get("lastMileAssignments") instanceof java.util.List<?>
+                ? (java.util.List<Map<String, Object>>) body.get("lastMileAssignments")
+                : java.util.Collections.emptyList();
+
+        log.info("[DEBUG][adminDispatchBatch] 末端路线分配数量={}, assignments={}", assignments.size(), assignments);
+
+        int successCount = 0;
+        for (Map<String, Object> assignment : assignments) {
+            try {
+                Long routeId  = Long.parseLong(assignment.get("routeId").toString());
+                Long driverId = Long.parseLong(assignment.get("driverId").toString());
+
+                log.info("[DEBUG][adminDispatchBatch] 处理末端路线: routeId={}, driverId={}", routeId, driverId);
+
+                // 优先更新已存在的 order_delivery（直送批次：deliveryStatus=0 已提前创建）
+                boolean assigned = deliveryService.assignExistingDeliveryByRoute(routeId, driverId);
+                log.info("[DEBUG][adminDispatchBatch] assignExistingDeliveryByRoute routeId={} → assigned={}", routeId, assigned);
+                if (!assigned) {
+                    // 路线尚未激活（Hub 中转批次：routeStatus=-1），写预分配到 logistics_route
+                    log.info("[DEBUG][adminDispatchBatch] 调用 preAssignDriver: routeId={}, driverId={}", routeId, driverId);
+                    logisticsFeign.preAssignDriver(routeId, java.util.Map.of("driverId", driverId), "admin");
+                    log.info("[DEBUG][adminDispatchBatch] preAssignDriver 调用成功 routeId={}", routeId);
+                }
+                successCount++;
+            } catch (Exception e) {
+                log.error("[DEBUG][adminDispatchBatch] 末端路线分配失败: assignment={}, error={}", assignment, e.getMessage(), e);
+            }
+        }
+
+        String msg = trunkDriverId != null
+                ? String.format("调度完成：干线司机已指派，%d 条末端路线已分配", successCount)
+                : String.format("调度完成（直送批次）：%d 条末端路线已直接分配", successCount);
+        return Result.success(msg);
     }
 
     // ================================================================

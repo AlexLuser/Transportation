@@ -91,26 +91,6 @@ export const signOrder = (orderId: number) => {
     })
 }
 
-/** 个人寄件请求参数 */
-export interface PersonalShipmentRequest {
-    senderAddressId: number
-    deliveryAddressId: number
-    cargoName: string
-    weight: number
-    declaredValue: number
-    quantity: number
-    remark?: string
-}
-
-/** 创建个人寄件单 */
-export const createPersonalShipment = (data: PersonalShipmentRequest) => {
-    return request({
-        url: '/orders/personal-shipment',
-        method: 'POST',
-        data
-    })
-}
-
 /** 管理员分页查询全部用户（支持用户名关键词搜索） */
 export const getAllUsers = (params: { current: number; size: number; keyword?: string }) => {
     return request({

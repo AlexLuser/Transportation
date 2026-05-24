@@ -36,15 +36,17 @@
                 </div>
                 <el-table :data="locations" stripe v-loading="loadingLocations">
                     <el-table-column prop="locationCode" label="库位编码" width="140" />
-                    <el-table-column prop="zone" label="区域" width="100" align="center" />
-                    <el-table-column prop="row" label="排" width="60" align="center" />
-                    <el-table-column prop="col" label="列" width="60" align="center" />
-                    <el-table-column prop="level" label="层" width="60" align="center" />
+                    <el-table-column prop="zoneCode" label="区域" width="100" align="center" />
+                    <el-table-column prop="rowNo" label="排" width="70" align="center" />
+                    <el-table-column prop="shelfNo" label="架" width="70" align="center" />
+                    <el-table-column prop="levelNo" label="层" width="70" align="center" />
                     <el-table-column prop="capacity" label="容量" width="80" align="center" />
-                    <el-table-column prop="currentStock" label="当前库存" width="90" align="center" />
+                    <el-table-column prop="currentStock" label="当前占用" width="90" align="center" />
                     <el-table-column label="状态" width="90" align="center">
                         <template #default="{ row }">
-                            <el-tag size="small" :type="row.status === 1 ? 'success' : 'info'">{{ row.status === 1 ? '启用' : '停用' }}</el-tag>
+                            <el-tag size="small" :type="row.status === 1 ? 'success' : row.status === 2 ? 'warning' : 'info'">
+                                {{ ['禁用','正常','锁定'][row.status] ?? row.status }}
+                            </el-tag>
                         </template>
                     </el-table-column>
                     <el-table-column label="操作" width="120" align="center">
@@ -87,7 +89,7 @@
                             <el-button v-if="row.status === 'PENDING'" size="small" type="primary"
                                 @click="handleStartInbound(row.id)">开始入库</el-button>
                             <el-button v-if="row.status === 'PROCESSING'" size="small" type="success"
-                                @click="handleCompleteInbound(row.id)">完成入库</el-button>
+                                @click="openCompleteInbound(row)">完成入库</el-button>
                             <el-button v-if="row.status === 'PENDING'" size="small" type="danger" plain
                                 @click="handleCancelInbound(row.id)">取消</el-button>
                         </template>
@@ -95,13 +97,14 @@
                 </el-table>
             </el-tab-pane>
 
-            <!-- ==================== Tab4: 出库记录 ==================== -->
-            <el-tab-pane label="出库记录" name="outbound">
+            <!-- ==================== Tab4: 出库管理 ==================== -->
+            <el-tab-pane label="出库管理" name="outbound">
                 <div class="toolbar">
                     <el-select v-model="outboundFilter.warehouseId" placeholder="筛选仓库" clearable style="width:160px">
                         <el-option v-for="w in myWarehouses" :key="w.id" :label="w.warehouseName" :value="w.id" />
                     </el-select>
                     <el-button type="primary" :icon="Search" @click="loadOutboundOrders">查询</el-button>
+                    <el-button type="success" :icon="Plus" @click="openCreateOutbound">新建出库单</el-button>
                 </div>
                 <el-table :data="outboundOrders" stripe v-loading="loadingOutbound">
                     <el-table-column prop="orderNo" label="出库单号" width="200" />
@@ -119,15 +122,43 @@
                         </template>
                     </el-table-column>
                     <el-table-column prop="createTime" label="创建时间" width="160" />
-                    <el-table-column label="操作" width="100" align="center">
+                    <el-table-column label="操作" width="260" align="center">
                         <template #default="{ row }">
                             <el-button size="small" @click="viewItems(row.id, 'outbound', row.orderNo)">明细</el-button>
+                            <el-button v-if="row.status === 'PENDING'" size="small" type="primary"
+                                @click="handleStartOutbound(row.id)">开始拣货</el-button>
+                            <el-button v-if="row.status === 'PROCESSING'" size="small" type="success"
+                                @click="handleCompleteOutbound(row.id)">完成出库</el-button>
+                            <el-button v-if="['PENDING','PROCESSING'].includes(row.status)" size="small" type="danger" plain
+                                @click="handleCancelOutbound(row.id)">取消</el-button>
                         </template>
                     </el-table-column>
                 </el-table>
             </el-tab-pane>
 
-            <!-- ==================== Tab5: 调拨申请 ==================== -->
+            <!-- ==================== Tab5: 库存 ==================== -->
+            <el-tab-pane label="库存" name="stock">
+                <div class="toolbar">
+                    <el-select v-model="stockWarehouseId" placeholder="选择仓库" clearable style="width:200px" @change="loadMyStock">
+                        <el-option v-for="w in myWarehouses" :key="w.id" :label="w.warehouseName" :value="w.id" />
+                    </el-select>
+                    <el-button type="primary" :icon="Refresh" @click="loadMyStock">刷新</el-button>
+                </div>
+                <el-table :data="myStockList" stripe v-loading="loadingStock" empty-text="请选择仓库查看当前商家库存">
+                    <el-table-column prop="productId" label="商品ID" width="90" />
+                    <el-table-column prop="productName" label="商品名称" min-width="160" />
+                    <el-table-column prop="stock" label="库存" width="100" align="center" />
+                    <el-table-column prop="unit" label="单位" width="80" align="center" />
+                    <el-table-column label="操作" width="120" align="center">
+                        <template #default="{ row }">
+                            <el-button size="small" type="primary" plain :disabled="!stockWarehouseId"
+                                @click="openStockEdit(row)">调整数量</el-button>
+                        </template>
+                    </el-table-column>
+                </el-table>
+            </el-tab-pane>
+
+            <!-- ==================== Tab6: 调拨申请 ==================== -->
             <el-tab-pane label="调拨申请" name="transfer">
                 <div class="toolbar">
                     <el-button type="success" :icon="Plus" @click="openCreateTransfer">发起调拨</el-button>
@@ -159,13 +190,13 @@
 
         </el-tabs>
 
-        <!-- 库位编辑弹窗 -->
+        <!-- 库位编辑弹窗（字段与后端 warehouse_location 一致） -->
         <el-dialog v-model="locationDialogVisible" :title="locationForm.id ? '编辑库位' : '添加库位'" width="440px" align-center>
             <el-form :model="locationForm" label-width="90px">
-                <el-form-item label="区域"><el-input v-model="locationForm.zone" placeholder="如 A、B、冷藏区" /></el-form-item>
-                <el-form-item label="排"><el-input-number v-model="locationForm.row" :min="1" style="width:100%" /></el-form-item>
-                <el-form-item label="列"><el-input-number v-model="locationForm.col" :min="1" style="width:100%" /></el-form-item>
-                <el-form-item label="层"><el-input-number v-model="locationForm.level" :min="1" style="width:100%" /></el-form-item>
+                <el-form-item label="区域编码"><el-input v-model="locationForm.zoneCode" placeholder="如 A、B、冷藏区" /></el-form-item>
+                <el-form-item label="排号"><el-input v-model="locationForm.rowNo" placeholder="如 01" /></el-form-item>
+                <el-form-item label="架号"><el-input v-model="locationForm.shelfNo" placeholder="如 01" /></el-form-item>
+                <el-form-item label="层号"><el-input v-model="locationForm.levelNo" placeholder="如 01" /></el-form-item>
                 <el-form-item label="容量(件)"><el-input-number v-model="locationForm.capacity" :min="1" style="width:100%" /></el-form-item>
                 <el-form-item label="库位编码"><el-input v-model="locationForm.locationCode" placeholder="如 A-01-02-03" /></el-form-item>
             </el-form>
@@ -175,11 +206,36 @@
             </template>
         </el-dialog>
 
+        <!-- 完成入库：实际数量与上架库位 -->
+        <el-dialog v-model="completeInboundVisible" title="完成入库" width="640px" align-center>
+            <el-table :data="completeInboundRows" size="small" border>
+                <el-table-column prop="productName" label="商品" min-width="120" />
+                <el-table-column prop="expectedQty" label="预计" width="72" align="center" />
+                <el-table-column label="实际" width="100" align="center">
+                    <template #default="{ row }">
+                        <el-input-number v-model="row.actualQty" :min="0" size="small" style="width:90px" />
+                    </template>
+                </el-table-column>
+                <el-table-column label="上架库位" min-width="160">
+                    <template #default="{ row }">
+                        <el-select v-model="row.locationId" clearable filterable placeholder="可选" size="small" style="width:100%">
+                            <el-option v-for="loc in completeInboundLocations" :key="loc.id"
+                                :label="loc.locationCode + (loc.zoneCode ? ` (${loc.zoneCode}区)` : '')" :value="loc.id" />
+                        </el-select>
+                    </template>
+                </el-table-column>
+            </el-table>
+            <template #footer>
+                <el-button @click="completeInboundVisible = false">取消</el-button>
+                <el-button type="primary" :loading="saving" @click="submitCompleteInbound">确认入库</el-button>
+            </template>
+        </el-dialog>
+
         <!-- 新建入库单弹窗 -->
-        <el-dialog v-model="createInboundVisible" title="新建入库单" width="540px" align-center>
+        <el-dialog v-model="createInboundVisible" title="新建入库单" width="620px" align-center>
             <el-form :model="inboundForm" label-width="100px">
                 <el-form-item label="仓库" required>
-                    <el-select v-model="inboundForm.warehouseId" style="width:100%">
+                    <el-select v-model="inboundForm.warehouseId" style="width:100%" @change="loadInboundFormLocations">
                         <el-option v-for="w in myWarehouses" :key="w.id" :label="w.warehouseName" :value="w.id" />
                     </el-select>
                 </el-form-item>
@@ -190,10 +246,10 @@
                     </el-select>
                 </el-form-item>
                 <el-form-item label="备注"><el-input v-model="inboundForm.remark" type="textarea" /></el-form-item>
-                <el-divider>承运物明细（必须至少添加一件）</el-divider>
-                <div v-for="(item, idx) in inboundForm.items" :key="idx" class="item-row">
-                    <el-select v-model="item.productId" filterable placeholder="搜索并选择承运物"
-                        @change="(val: number) => onPickProduct(val, item)" style="flex:1">
+                <el-divider>商品明细（必须至少添加一件；库位可选）</el-divider>
+                <div v-for="(item, idx) in inboundForm.items" :key="idx" class="item-row item-row-wide">
+                    <el-select v-model="item.productId" filterable placeholder="搜索并选择商品"
+                        @change="(val: number) => onPickProduct(val, item)" style="flex:1;min-width:160px">
                         <el-option v-for="p in productList" :key="p.id"
                             :label="p.productName" :value="p.id">
                             <span>{{ p.productName }}</span>
@@ -201,11 +257,16 @@
                         </el-option>
                     </el-select>
                     <el-input-number v-model="item.expectedQty" :min="1" placeholder="数量" style="width:100px" />
+                    <el-select v-model="item.locationId" clearable filterable placeholder="上架库位"
+                        style="width:160px" :disabled="!inboundForm.warehouseId">
+                        <el-option v-for="loc in locationsForInboundForm" :key="loc.id"
+                            :label="loc.locationCode" :value="loc.id" />
+                    </el-select>
                     <el-button :icon="Delete" type="danger" plain circle size="small" @click="inboundForm.items.splice(idx,1)" />
                 </div>
                 <el-alert v-if="inboundForm.items.length === 0" type="warning" show-icon :closable="false"
-                    title="请至少添加一个承运物明细" style="margin-bottom:8px" />
-                <el-button size="small" :icon="Plus" @click="inboundForm.items.push({productId:null,productName:'',expectedQty:1})">添加承运物</el-button>
+                    title="请至少添加一个商品明细" style="margin-bottom:8px" />
+                <el-button size="small" :icon="Plus" @click="inboundForm.items.push({productId:null,productName:'',expectedQty:1,locationId:null})">添加商品</el-button>
             </el-form>
             <template #footer>
                 <el-button @click="createInboundVisible = false">取消</el-button>
@@ -233,12 +294,12 @@
                     </el-select>
                 </el-form-item>
                 <el-form-item label="备注"><el-input v-model="transferForm.remark" type="textarea" /></el-form-item>
-                <el-divider>调拨承运物（仅显示调出仓库有库存的承运物）</el-divider>
+                <el-divider>调拨商品（仅显示调出仓库有库存的商品）</el-divider>
                 <div v-if="transferForm.srcWarehouseId && srcWarehouseStock.length === 0" style="color:#909399;font-size:13px;margin-bottom:8px">
-                    调出仓库暂无库存承运物
+                    调出仓库暂无库存商品
                 </div>
                 <div v-for="(item, idx) in transferForm.items" :key="idx" class="item-row">
-                    <el-select v-model="item.productId" filterable placeholder="选择调出仓库的承运物"
+                    <el-select v-model="item.productId" filterable placeholder="选择调出仓库的商品"
                         @change="(val: number) => onPickTransferProduct(val, item)" style="flex:1"
                         :disabled="!transferForm.srcWarehouseId">
                         <el-option v-for="s in srcWarehouseStock" :key="s.productId"
@@ -252,10 +313,10 @@
                     <el-button :icon="Delete" type="danger" plain circle size="small" @click="transferForm.items.splice(idx,1)" />
                 </div>
                 <el-alert v-if="transferForm.items.length === 0" type="warning" show-icon :closable="false"
-                    title="请至少添加一个调拨承运物" style="margin-bottom:8px" />
+                    title="请至少添加一个调拨商品" style="margin-bottom:8px" />
                 <el-button size="small" :icon="Plus"
                     :disabled="!transferForm.srcWarehouseId || srcWarehouseStock.length === 0"
-                    @click="transferForm.items.push({productId:null,productName:'',quantity:1})">添加承运物</el-button>
+                    @click="transferForm.items.push({productId:null,productName:'',quantity:1})">添加商品</el-button>
             </el-form>
             <template #footer>
                 <el-button @click="createTransferVisible = false">取消</el-button>
@@ -266,11 +327,12 @@
         <!-- 明细查看弹窗 -->
         <el-dialog v-model="itemsDialogVisible" :title="itemsDialogTitle" width="560px">
             <el-table :data="currentItems" stripe size="small">
-                <el-table-column prop="productId" label="承运物ID" width="90" />
-                <el-table-column prop="productName" label="承运物名称" min-width="140" />
+                <el-table-column prop="productId" label="商品ID" width="80" />
+                <el-table-column prop="productName" label="商品名称" min-width="140" />
                 <el-table-column v-if="itemsType === 'inbound'" prop="expectedQty" label="预计" width="80" align="center" />
                 <el-table-column v-if="itemsType === 'inbound'" prop="actualQty" label="实际" width="80" align="center" />
                 <el-table-column v-if="itemsType !== 'inbound'" prop="quantity" label="数量" width="80" align="center" />
+                <el-table-column v-if="itemsType === 'inbound' || itemsType === 'outbound'" prop="locationId" label="库位ID" width="88" align="center" />
                 <el-table-column label="状态" width="80" align="center">
                     <template #default="{ row }">
                         <el-tag size="small" :type="row.status === 'DONE' ? 'success' : 'info'">{{ row.status }}</el-tag>
@@ -278,11 +340,65 @@
                 </el-table-column>
             </el-table>
         </el-dialog>
+
+        <!-- 新建出库单（商家） -->
+        <el-dialog v-model="createOutboundVisible" title="新建出库单" width="620px" align-center>
+            <el-form :model="outboundForm" label-width="100px">
+                <el-form-item label="仓库" required>
+                    <el-select v-model="outboundForm.warehouseId" style="width:100%" @change="loadOutboundFormLocations">
+                        <el-option v-for="w in myWarehouses" :key="w.id" :label="w.warehouseName" :value="w.id" />
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="目的类型">
+                    <el-select v-model="outboundForm.destType" style="width:100%">
+                        <el-option label="配送出库" value="DELIVERY" />
+                        <el-option label="退货出库" value="RETURN" />
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="备注"><el-input v-model="outboundForm.remark" type="textarea" /></el-form-item>
+                <el-divider>商品明细（拣货库位可选）</el-divider>
+                <div v-for="(item, idx) in outboundForm.items" :key="idx" class="item-row item-row-wide">
+                    <el-select v-model="item.productId" filterable placeholder="选择商品"
+                        @change="(val: number) => onPickProduct(val, item)" style="flex:1;min-width:160px">
+                        <el-option v-for="p in productList" :key="p.id" :label="p.productName" :value="p.id">
+                            <span>{{ p.productName }}</span>
+                        </el-option>
+                    </el-select>
+                    <el-input-number v-model="item.quantity" :min="1" style="width:100px" />
+                    <el-select v-model="item.locationId" clearable filterable placeholder="拣货库位"
+                        style="width:160px" :disabled="!outboundForm.warehouseId">
+                        <el-option v-for="loc in locationsForOutboundForm" :key="loc.id"
+                            :label="loc.locationCode" :value="loc.id" />
+                    </el-select>
+                    <el-button :icon="Delete" type="danger" plain circle size="small" @click="outboundForm.items.splice(idx,1)" />
+                </div>
+                <el-button size="small" :icon="Plus" @click="outboundForm.items.push({productId:null,productName:'',quantity:1,locationId:null})">添加商品</el-button>
+            </el-form>
+            <template #footer>
+                <el-button @click="createOutboundVisible = false">取消</el-button>
+                <el-button type="primary" :loading="saving" @click="handleCreateOutbound">提交</el-button>
+            </template>
+        </el-dialog>
+
+        <!-- 库存调整 -->
+        <el-dialog v-model="stockEditVisible" title="调整库存数量" width="400px" align-center>
+            <el-form v-if="stockEditRow" label-width="90px">
+                <el-form-item label="商品"><span>{{ stockEditRow.productName }}</span></el-form-item>
+                <el-form-item label="当前库存"><span>{{ stockEditRow.stock }}</span></el-form-item>
+                <el-form-item label="新数量" required>
+                    <el-input-number v-model="stockEditQty" :min="0" style="width:100%" />
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="stockEditVisible = false">取消</el-button>
+                <el-button type="primary" :loading="saving" @click="handleSaveStockAdjust">保存</el-button>
+            </template>
+        </el-dialog>
     </div>
 </template>
 
 <script setup lang="ts" name="ShopWarehouse">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, Refresh, Search, Delete } from '@element-plus/icons-vue';
 import { useUserStore } from '@/stores/userStore';
@@ -291,9 +407,10 @@ import {
     getLocationsByWarehouse, createLocation, updateLocation, deleteLocation,
     getStockDetailByWarehouse,
     getInboundOrders, getInboundOrderItems, createInboundOrder, startInbound, completeInbound, cancelInbound,
-    getOutboundOrders, getOutboundOrderItems,
+    getOutboundOrders, getOutboundOrderItems, createOutboundOrder, startOutbound, completeOutbound, cancelOutbound,
     getTransferOrders, getTransferOrderItems, createTransferOrder,
-    approveTransfer, completeTransfer, cancelTransfer
+    approveTransfer, completeTransfer, cancelTransfer,
+    updateStock
 } from '@/api/shop';
 
 const userStore = useUserStore();
@@ -314,7 +431,7 @@ const statusLabelMap: Record<string, string> = { PENDING: '待处理', PROCESSIN
 const transferStatusTypeMap: Record<string, string> = { PENDING: 'warning', APPROVED: 'primary', IN_TRANSIT: 'warning', DONE: 'success', CANCELLED: 'danger' };
 const transferStatusLabelMap: Record<string, string> = { PENDING: '待执行', APPROVED: '待执行', IN_TRANSIT: '在途', DONE: '已完成', CANCELLED: '已取消' };
 
-// 承运物列表（入库用，显示所有承运物）
+// 商品列表（入库用，显示所有商品）
 const productList = ref<any[]>([]);
 const loadProducts = async () => {
     if (!shopId.value) return;
@@ -329,7 +446,7 @@ const onPickProduct = (productId: number, item: any) => {
     if (p) item.productName = p.productName;
 };
 
-// 调出仓库库存（调拨用，仅显示源仓库有库存的承运物）
+// 调出仓库库存（调拨用，仅显示源仓库有库存的商品）
 const srcWarehouseStock = ref<any[]>([]);
 const onSrcWarehouseChange = async (warehouseId: number) => {
     transferForm.items = [];
@@ -364,7 +481,10 @@ const locWarehouseId = ref<number | null>(null);
 const locations = ref<any[]>([]);
 const loadingLocations = ref(false);
 const locationDialogVisible = ref(false);
-const locationForm = reactive<any>({ id: undefined, warehouseId: null, zone: '', row: 1, col: 1, level: 1, capacity: 100, locationCode: '' });
+const locationForm = reactive<any>({
+    id: undefined, warehouseId: null as number | null,
+    zoneCode: '', rowNo: '', shelfNo: '', levelNo: '', capacity: 100, locationCode: '', status: 1
+});
 
 const goToLocations = (w: any) => {
     locWarehouseId.value = w.id;
@@ -383,11 +503,21 @@ const loadLocations = async () => {
 
 const openLocationDialog = (row?: any) => {
     if (row) { Object.assign(locationForm, row); }
-    else { Object.assign(locationForm, { id: undefined, warehouseId: locWarehouseId.value, zone: '', row: 1, col: 1, level: 1, capacity: 100, locationCode: '' }); }
+    else {
+        Object.assign(locationForm, {
+            id: undefined,
+            warehouseId: locWarehouseId.value,
+            zoneCode: '', rowNo: '', shelfNo: '', levelNo: '', capacity: 100, locationCode: '', status: 1
+        });
+    }
     locationDialogVisible.value = true;
 };
 
 const handleSaveLocation = async () => {
+    if (!locationForm.zoneCode?.trim() || !locationForm.locationCode?.trim()) {
+        ElMessage.warning('请填写区域编码与库位编码');
+        return;
+    }
     saving.value = true;
     try {
         if (locationForm.id) { await updateLocation(locationForm.id, { ...locationForm }); ElMessage.success('库位已更新'); }
@@ -409,10 +539,15 @@ function validateItems(items: any[], label: string): boolean {
         return false;
     }
     if (items.some((i: any) => !i.productId)) {
-        ElMessage.warning('有明细未选择承运物，请补充后提交');
+        ElMessage.warning('有明细未选择商品，请补充后提交');
         return false;
     }
     return true;
+}
+
+function apiErrorMessage(e: any, fallback: string) {
+    if (typeof e === 'string' && e.length) return e;
+    return e?.response?.data?.message ?? e?.message ?? fallback;
 }
 
 // ==================== 入库 ====================
@@ -432,30 +567,71 @@ const loadInboundOrders = async () => {
 };
 const openCreateInbound = () => {
     Object.assign(inboundForm, { warehouseId: null, sourceType: 'PURCHASE', remark: '', items: [] });
+    locationsForInboundForm.value = [];
     createInboundVisible.value = true;
 };
 const handleCreateInbound = async () => {
     if (!inboundForm.warehouseId) { ElMessage.warning('请选择仓库'); return; }
-    if (!validateItems(inboundForm.items, '承运物')) return;
+    if (!validateItems(inboundForm.items, '商品')) return;
     saving.value = true;
     try {
         await createInboundOrder({ ...inboundForm, shopId: shopId.value });
         ElMessage.success('入库单已创建');
         createInboundVisible.value = false;
         loadInboundOrders();
+    } catch (e: any) {
+        ElMessage.error(apiErrorMessage(e, '创建失败'));
     } finally { saving.value = false; }
 };
 const handleStartInbound = async (id: number) => {
-    await startInbound(id);
-    ElMessage.success('已开始入库');
-    loadInboundOrders();
+    try {
+        await startInbound(id);
+        ElMessage.success('已开始入库');
+        loadInboundOrders();
+    } catch (e: any) {
+        ElMessage.error(apiErrorMessage(e, '操作失败'));
+    }
 };
-const handleCompleteInbound = async (id: number) => {
-    const res = await getInboundOrderItems(id);
-    const items = (res.data ?? []).map((i: any) => ({ ...i, actualQty: i.expectedQty }));
-    await completeInbound(id, items);
-    ElMessage.success('入库完成，库存已更新');
-    loadInboundOrders();
+
+const completeInboundVisible = ref(false);
+const completeInboundOrderId = ref<number | null>(null);
+const completeInboundRows = ref<any[]>([]);
+const completeInboundLocations = ref<any[]>([]);
+
+const openCompleteInbound = async (row: any) => {
+    completeInboundOrderId.value = row.id;
+    try {
+        const res = await getInboundOrderItems(row.id);
+        completeInboundRows.value = (res.data ?? []).map((i: any) => ({
+            ...i,
+            actualQty: i.expectedQty ?? i.actualQty ?? 0,
+            locationId: i.locationId ?? null
+        }));
+        const locRes = await getLocationsByWarehouse(row.warehouseId);
+        completeInboundLocations.value = locRes.data ?? [];
+        completeInboundVisible.value = true;
+    } catch (e: any) {
+        ElMessage.error(apiErrorMessage(e, '加载明细失败'));
+    }
+};
+
+const submitCompleteInbound = async () => {
+    if (!completeInboundOrderId.value) return;
+    const bad = completeInboundRows.value.some((r: any) => r.actualQty == null || r.actualQty < 0);
+    if (bad) {
+        ElMessage.warning('请填写每条明细的实际数量（≥0）');
+        return;
+    }
+    saving.value = true;
+    try {
+        await completeInbound(completeInboundOrderId.value, completeInboundRows.value);
+        ElMessage.success('入库完成，库存已更新');
+        completeInboundVisible.value = false;
+        loadInboundOrders();
+        loadMyStock();
+    } catch (e: any) {
+        ElMessage.error(apiErrorMessage(e, '完成入库失败'));
+    } finally { saving.value = false; }
 };
 const handleCancelInbound = async (id: number) => {
     await ElMessageBox.confirm('确认取消？', '警告', { type: 'warning' });
@@ -466,6 +642,39 @@ const handleCancelInbound = async (id: number) => {
 const outboundOrders = ref<any[]>([]);
 const loadingOutbound = ref(false);
 const outboundFilter = reactive({ warehouseId: null as number | null });
+const createOutboundVisible = ref(false);
+const outboundForm = reactive<any>({
+    warehouseId: null as number | null,
+    destType: 'DELIVERY',
+    remark: '',
+    items: [] as any[]
+});
+
+/** 入库/出库表单中选用的库位列表 */
+const locationsForInboundForm = ref<any[]>([]);
+const locationsForOutboundForm = ref<any[]>([]);
+
+const loadInboundFormLocations = async () => {
+    locationsForInboundForm.value = [];
+    if (!inboundForm.warehouseId) return;
+    try {
+        const res = await getLocationsByWarehouse(inboundForm.warehouseId);
+        locationsForInboundForm.value = res.data ?? [];
+    } catch { /* 静默 */ }
+};
+
+const loadOutboundFormLocations = async () => {
+    locationsForOutboundForm.value = [];
+    if (!outboundForm.warehouseId) return;
+    try {
+        const res = await getLocationsByWarehouse(outboundForm.warehouseId);
+        locationsForOutboundForm.value = res.data ?? [];
+    } catch { /* 静默 */ }
+};
+
+watch(() => inboundForm.warehouseId, () => { loadInboundFormLocations(); });
+watch(() => outboundForm.warehouseId, () => { loadOutboundFormLocations(); });
+
 const loadOutboundOrders = async () => {
     if (!shopId.value) return;
     loadingOutbound.value = true;
@@ -473,6 +682,107 @@ const loadOutboundOrders = async () => {
         const res = await getOutboundOrders({ shopId: shopId.value, warehouseId: outboundFilter.warehouseId || undefined });
         outboundOrders.value = res.data ?? [];
     } finally { loadingOutbound.value = false; }
+};
+
+const openCreateOutbound = () => {
+    Object.assign(outboundForm, { warehouseId: null, destType: 'DELIVERY', remark: '', items: [] });
+    locationsForOutboundForm.value = [];
+    createOutboundVisible.value = true;
+};
+
+const handleCreateOutbound = async () => {
+    if (!outboundForm.warehouseId) { ElMessage.warning('请选择仓库'); return; }
+    if (!validateItems(outboundForm.items as any[], '出库商品')) return;
+    saving.value = true;
+    try {
+        await createOutboundOrder({
+            ...outboundForm,
+            shopId: shopId.value,
+            items: outboundForm.items
+        });
+        ElMessage.success('出库单已创建');
+        createOutboundVisible.value = false;
+        loadOutboundOrders();
+    } catch (e: any) {
+        ElMessage.error(apiErrorMessage(e, '创建出库单失败'));
+    } finally { saving.value = false; }
+};
+
+const handleStartOutbound = async (id: number) => {
+    try {
+        await startOutbound(id);
+        ElMessage.success('已开始拣货');
+        loadOutboundOrders();
+    } catch (e: any) {
+        ElMessage.error(apiErrorMessage(e, '操作失败'));
+    }
+};
+
+const handleCompleteOutbound = async (id: number) => {
+    try {
+        await completeOutbound(id);
+        ElMessage.success('出库完成');
+        loadOutboundOrders();
+        loadMyStock();
+    } catch (e: any) {
+        ElMessage.error(apiErrorMessage(e, '完成出库失败'));
+    }
+};
+
+const handleCancelOutbound = async (id: number) => {
+    await ElMessageBox.confirm('确认取消出库单？', '警告', { type: 'warning' });
+    try {
+        await cancelOutbound(id);
+        ElMessage.success('已取消');
+        loadOutboundOrders();
+    } catch (e: any) {
+        ElMessage.error(apiErrorMessage(e, '取消失败'));
+    }
+};
+
+// ==================== 库存（本商家） ====================
+const stockWarehouseId = ref<number | null>(null);
+const myStockList = ref<any[]>([]);
+const loadingStock = ref(false);
+const stockEditVisible = ref(false);
+const stockEditRow = ref<any>(null);
+const stockEditQty = ref(0);
+
+const loadMyStock = async () => {
+    if (!shopId.value || !stockWarehouseId.value) {
+        myStockList.value = [];
+        return;
+    }
+    loadingStock.value = true;
+    try {
+        const res = await getStockDetailByWarehouse(stockWarehouseId.value, shopId.value);
+        myStockList.value = res.data ?? [];
+    } catch {
+        myStockList.value = [];
+    } finally { loadingStock.value = false; }
+};
+
+const openStockEdit = (row: any) => {
+    stockEditRow.value = row;
+    stockEditQty.value = row.stock ?? 0;
+    stockEditVisible.value = true;
+};
+
+const handleSaveStockAdjust = async () => {
+    if (!stockWarehouseId.value || !stockEditRow.value?.productId) return;
+    saving.value = true;
+    try {
+        await updateStock({
+            warehouseId: stockWarehouseId.value,
+            productId: stockEditRow.value.productId,
+            stock: stockEditQty.value
+        });
+        ElMessage.success('库存已更新');
+        stockEditVisible.value = false;
+        loadMyStock();
+    } catch (e: any) {
+        ElMessage.error(apiErrorMessage(e, '更新库存失败'));
+    } finally { saving.value = false; }
 };
 
 // ==================== 调拨 ====================
@@ -502,12 +812,12 @@ const handleCreateTransfer = async () => {
     if (transferForm.srcWarehouseId === transferForm.dstWarehouseId) {
         ElMessage.warning('调出仓库和调入仓库不能相同'); return;
     }
-    if (!validateItems(transferForm.items, '调拨承运物')) return;
+    if (!validateItems(transferForm.items, '调拨商品')) return;
     // 校验数量不超过库存
     for (const item of transferForm.items) {
         const max = getStockMax(item.productId);
         if (item.quantity > max) {
-            ElMessage.warning(`承运物「${item.productName}」调拨数量 (${item.quantity}) 超过库存 (${max})`);
+            ElMessage.warning(`商品「${item.productName}」调拨数量 (${item.quantity}) 超过库存 (${max})`);
             return;
         }
     }
@@ -525,9 +835,14 @@ const handleCreateTransfer = async () => {
 const handleCompleteTransfer = async (id: number) => {
     await ElMessageBox.confirm('确认执行调拨？将立即转移库存并生成入库/出库记录。', '执行调拨',
         { type: 'warning', confirmButtonText: '确认执行' });
-    await completeTransfer(id);
-    ElMessage.success('调拨完成，库存已转移，入库/出库单已自动生成');
-    loadTransferOrders(); loadInboundOrders(); loadOutboundOrders();
+    try {
+        await completeTransfer(id);
+        ElMessage.success('调拨完成，库存已转移，入库/出库单已自动生成');
+        loadTransferOrders(); loadInboundOrders(); loadOutboundOrders();
+        loadMyStock();
+    } catch (e: any) {
+        ElMessage.error(apiErrorMessage(e, '调拨执行失败'));
+    }
 };
 
 const handleCancelTransfer = async (id: number) => {
@@ -570,4 +885,5 @@ onMounted(async () => {
 .main-tabs { background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
 .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
 .item-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.item-row-wide { flex-wrap: wrap; }
 </style>

@@ -19,6 +19,8 @@ public interface WarehouseLocationService extends IService<WarehouseLocation> {
 
     boolean deleteLocation(Long locationId);
 
-    /** 更新库位占用量（入库/出库时调用） */
-    boolean updateStock(Long locationId, int delta);
+    /**
+     * 调整库位占用（入库为正、出库为负）。校验归属仓库、容量上界与占用非负。
+     */
+    void adjustStock(Long locationId, Long warehouseId, int delta);
 }

@@ -2,10 +2,10 @@
     <div class="order-container" v-loading="loading">
         <div class="order-header-bar">
             <el-tabs v-model="activeTab" style="flex:1">
-                <el-tab-pane label="全部运单" name="all"/>
+                <el-tab-pane label="全部订单" name="all"/>
                 <el-tab-pane label="待支付" name="0"/>
                 <el-tab-pane label="待发货" name="1"/>
-                <el-tab-pane label="待揽收" name="2"/>
+                <el-tab-pane label="待揽件" name="2"/>
                 <el-tab-pane label="派送中" name="3"/>
                 <el-tab-pane label="待签收" name="6"/>
                 <el-tab-pane label="已完成" name="4"/>
@@ -14,12 +14,12 @@
             <el-button :icon="Refresh" size="small" :loading="loading" @click="fetchOrders" style="margin-bottom:4px">刷新</el-button>
         </div>
         <div class="order-list">
-            <el-empty v-if="filteredOrders.length === 0" description="暂无运单" class="empty-state" />
+            <el-empty v-if="filteredOrders.length === 0" description="暂无订单" class="empty-state" />
             <template v-else>
                 <div class="order-item" v-for="order in filteredOrders" :key="order.id">
                     <div class="order-header">
                         <div class="order-info">
-                            <span class="order-number">运单号：{{ order.orderNo }}</span>
+                            <span class="order-number">订单号：{{ order.orderNo }}</span>
                             <span class="order-time">下单时间：{{ formatDate(order.createTime) }}</span>
                         </div>
                         <div class="order-status">
@@ -28,7 +28,7 @@
                     </div>
                     <div class="order-body">
                         <div class="amount-details">
-                            <span>申报价值：¥{{ order.productAmount }}</span>
+                            <span>商品金额：¥{{ order.productAmount }}</span>
                             <span>运费：¥{{ order.shippingFee }}</span>
                         </div>
                         <div class="amount-total">
@@ -71,17 +71,17 @@
                 <div class="detail-section">
                     <div class="section-title">基本信息</div>
                     <el-descriptions :column="2" border size="small">
-                        <el-descriptions-item label="运单号">{{ currentDetail.order?.orderNo }}</el-descriptions-item>
-                        <el-descriptions-item label="运单状态">
+                        <el-descriptions-item label="订单号">{{ currentDetail.order?.orderNo }}</el-descriptions-item>
+                        <el-descriptions-item label="订单状态">
                             <el-tag :type="orderStatusTagType(currentDetail.order?.orderStatus)">
                                 {{ orderStatusText(currentDetail.order?.orderStatus) }}
                             </el-tag>
                         </el-descriptions-item>
                         <el-descriptions-item label="下单时间">{{ formatDate(currentDetail.order?.createTime) }}</el-descriptions-item>
                         <el-descriptions-item label="支付时间">{{ formatDate(currentDetail.order?.paymentTime) }}</el-descriptions-item>
-                        <el-descriptions-item label="申报价值">¥{{ currentDetail.order?.productAmount }}</el-descriptions-item>
+                        <el-descriptions-item label="商品金额">¥{{ currentDetail.order?.productAmount }}</el-descriptions-item>
                         <el-descriptions-item label="运费">¥{{ currentDetail.order?.shippingFee }}</el-descriptions-item>
-                        <el-descriptions-item label="合计费用" :span="2">
+                        <el-descriptions-item label="订单总额" :span="2">
                             <span class="detail-total">¥{{ currentDetail.order?.totalAmount }}</span>
                         </el-descriptions-item>
                         <el-descriptions-item v-if="currentDetail.order?.remark" label="备注" :span="2">
@@ -93,11 +93,11 @@
                     </el-descriptions>
                 </div>
 
-                <!-- 货物清单 -->
+                <!-- 商品列表 -->
                 <div class="detail-section">
-                    <div class="section-title">货物清单</div>
+                    <div class="section-title">商品清单</div>
                     <el-table :data="currentDetail.items ?? []" border size="small">
-                        <el-table-column label="货物图片" width="80" align="center">
+                        <el-table-column label="商品图片" width="80" align="center">
                             <template #default="{ row }">
                                 <el-image
                                     v-if="row.productImage"
@@ -108,8 +108,8 @@
                                 <span v-else class="no-image">无图</span>
                             </template>
                         </el-table-column>
-                        <el-table-column prop="productName" label="货物名称" min-width="140" />
-                        <el-table-column prop="productPrice" label="申报价值" width="100" align="right">
+                        <el-table-column prop="productName" label="商品名称" min-width="140" />
+                        <el-table-column prop="productPrice" label="单价" width="90" align="right">
                             <template #default="{ row }">¥{{ row.productPrice }}</template>
                         </el-table-column>
                         <el-table-column prop="quantity" label="数量" width="70" align="center" />
@@ -127,7 +127,7 @@
                     <div class="section-title">物流全程追踪</div>
                     <el-empty
                         v-if="currentDetail.order?.orderStatus === 2 && (!orderJourney || orderJourney.length === 0)"
-                        description="运单已进入调度池，等待运输员揽收，物流轨迹将在揽收后更新"
+                        description="订单待揽件，物流信息将在发货后更新"
                         :image-size="60"
                     />
                     <LogisticsJourney
@@ -244,7 +244,7 @@
         const map: Record<number, string> = {
             0: '待支付',
             1: '待发货',
-            2: '待揽收',
+            2: '待揽件',
             3: '派送中',
             6: '待签收',
             4: '已完成',
@@ -256,12 +256,12 @@
     const handleSign = async (orderId: number) => {
         try {
             await ElMessageBox.confirm(
-                '确认已收到承运物？确认后运单将标记为已完成。',
+                '确认已收到商品？确认后订单将标记为已完成。',
                 '确认签收',
                 { confirmButtonText: '确认签收', cancelButtonText: '取消', type: 'success' }
             );
             await signOrder(orderId);
-            ElMessage.success('签收成功，感谢您使用本物流服务！');
+            ElMessage.success('签收成功，感谢您的购买！');
             fetchOrders();
         } catch {
             // 用户取消

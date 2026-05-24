@@ -4,15 +4,15 @@
             <el-aside width="200px">
                 <div class="aside-logo">智能物流</div>
                 <el-menu router :default-active="$route.path">
-                    <el-menu-item index="/sender/home/shipment">
-                        <el-icon><Promotion /></el-icon>
-                        <span>发起寄件</span>
+                    <el-menu-item index="/customer/home/products">
+                        <el-icon><ShoppingBag /></el-icon>
+                        <span>商品浏览</span>
                     </el-menu-item>
-                    <el-menu-item index="/sender/home/orders">
+                    <el-menu-item index="/customer/home/orders">
                         <el-icon><List /></el-icon>
-                        <span>我的运单</span>
+                        <span>我的订单</span>
                     </el-menu-item>
-                    <el-menu-item index="/sender/home/profile">
+                    <el-menu-item index="/customer/home/profile">
                         <el-icon><User /></el-icon>
                         <span>个人中心</span>
                     </el-menu-item>
@@ -22,7 +22,7 @@
                 <el-header>
                     <span class="header-title">智能物流管理系统</span>
                     <div class="header-right">
-                        <el-tag type="primary" size="small" effect="plain" class="role-tag">发件人</el-tag>
+                        <el-tag type="primary" size="small" effect="plain" class="role-tag">顾客</el-tag>
                         <span class="header-user">{{ userStore.userInfo?.username }}</span>
                         <el-button type="danger" plain size="small" @click="handleLogout">退出登录</el-button>
                     </div>
@@ -39,7 +39,7 @@
     import { logout } from '@/api/auth';
     import { router } from '@/router';
     import { useUserStore } from '@/stores/userStore';
-    import { List, User, Promotion } from '@element-plus/icons-vue';
+    import { ShoppingBag, List, User } from '@element-plus/icons-vue';
 
     const userStore = useUserStore();
 

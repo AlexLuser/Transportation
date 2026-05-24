@@ -68,6 +68,17 @@ public interface LogisticsFeignClient {
             @PathVariable("routeId") Long routeId,
             @PathVariable("orderId") Long orderId,
             @RequestHeader("userId") String userId);
+
+    /**
+     * 管理员预分配末端路线司机（服务间内部调用，传 roleCode="admin" 通过鉴权）
+     * 请求体：{"driverId": x}
+     * 将 driverId 写入 logistics_route，Hub 到达激活时自动转为已接单配送记录
+     */
+    @PutMapping("/api/logistics/routes/{routeId}/pre-assign")
+    Result<Void> preAssignDriver(
+            @PathVariable("routeId") Long routeId,
+            @RequestBody Map<String, Long> body,
+            @RequestHeader("roleCode") String roleCode);
 }
 
 

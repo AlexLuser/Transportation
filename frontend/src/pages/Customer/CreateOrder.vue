@@ -1,8 +1,8 @@
 <template>
     <div class="create-order-container" v-loading="loading">
-        <!-- 承运物信息 -->
+        <!-- 商品信息 -->
         <el-card class="section-card">
-            <template #header>承运物信息</template>
+            <template #header>商品信息</template>
             <div class="product-section">
                 <el-image :src="getFirstImage(product?.images)" fit="cover" class="product-image">
                     <template #error>
@@ -17,7 +17,7 @@
                     <div class="product-shop-id">商家编号：{{ product?.shopId }}</div>
                 </div>
                 <div class="product-quantity">
-                    <div class="quantity-label">托运数量</div>
+                    <div class="quantity-label">购买数量</div>
                     <el-input-number v-model="quantity" :min="1" :max="100" controls-position="right" />
                     <div class="subtotal">小计：<span class="subtotal-price">¥{{ totalAmount }}</span></div>
                 </div>
@@ -141,14 +141,14 @@
                 remark: remark.value,
             });
             ElMessage.success('下单成功');
-            router.push('/sender/home/orders');
+            router.push('/customer/home/orders');
         } finally {
             submitting.value = false;
         }
     };
 
     const goToAddress = () => {
-        router.push('/sender/home/profile');
+        router.push('/customer/home/profile');
     };
 
     onMounted(() => {

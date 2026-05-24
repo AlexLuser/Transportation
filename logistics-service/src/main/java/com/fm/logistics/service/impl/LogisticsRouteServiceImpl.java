@@ -370,6 +370,48 @@ public class LogisticsRouteServiceImpl implements LogisticsRouteService {
     }
 
     // ----------------------------------------------------------------
+    //  管理员预分配 & 预调度查询
+    // ----------------------------------------------------------------
+
+    @Override
+    @Transactional
+    public void preAssignDriver(Long routeId, Long driverId) {
+        LogisticsRoute route = logisticsRouteMapper.selectById(routeId);
+        log.info("[DEBUG][preAssignDriver] routeId={}, driverId={}, route={}", routeId, driverId,
+                route == null ? "NULL" : "segmentType=" + route.getSegmentType()
+                        + ", routeStatus=" + route.getRouteStatus()
+                        + ", currentDriverId=" + route.getDriverId());
+        if (route == null) {
+            throw new BusinessException(ResultCode.FAIL.getCode(), "路线不存在：id=" + routeId);
+        }
+
+        int status = route.getRouteStatus() == null ? 0 : route.getRouteStatus();
+
+        // 只允许对 routeStatus=-1（等待干线到达的 Hub 末端路线）进行预分配
+        if (status != -1) {
+            log.warn("[DEBUG][preAssignDriver] 路线状态不是 -1，拒绝预分配 routeStatus={}", status);
+            throw new BusinessException(ResultCode.FAIL.getCode(),
+                    "只能对待激活（routeStatus=-1）的末端路线进行预分配，当前状态=" + status);
+        }
+
+        route.setDriverId(driverId);
+        logisticsRouteMapper.updateById(route);
+        log.info("[DEBUG][preAssignDriver] 成功：routeId={} 预分配给 driverId={}", routeId, driverId);
+    }
+
+    @Override
+    public List<LogisticsRoute> getPreDispatchedRoutes(Long driverId) {
+        List<LogisticsRoute> result = logisticsRouteMapper.selectList(
+                new LambdaQueryWrapper<LogisticsRoute>()
+                        .eq(LogisticsRoute::getDriverId, driverId)
+                        .eq(LogisticsRoute::getSegmentType, 2)
+                        .eq(LogisticsRoute::getRouteStatus, -1)
+                        .orderByAsc(LogisticsRoute::getCreateTime));
+        log.info("[DEBUG][getPreDispatchedRoutes] driverId={}, 结果数量={}", driverId, result.size());
+        return result;
+    }
+
+    // ----------------------------------------------------------------
     //  私有方法
     // ----------------------------------------------------------------
 

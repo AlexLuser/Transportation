@@ -5,7 +5,7 @@ import com.fm.common.exception.BusinessException;
 import com.fm.common.result.Result;
 import com.fm.common.result.ResultCode;
 import com.fm.order.dto.CreateOrderRequestDTO;
-import com.fm.order.dto.CreatePersonalShipmentRequestDTO;
+
 import com.fm.order.dto.OrderDetailDTO;
 import com.fm.order.dto.ShipOrderRequestDTO;
 import com.fm.order.entity.Order;
@@ -131,28 +131,6 @@ public class OrderController {
         Long customerId = resolveCustomerId(userId);
         OrderDetailDTO orderDetail = orderService.createOrder(customerId, request);
         return Result.success(orderDetail);
-    }
-
-    /**
-     * 创建个人寄件单（不依赖商户/仓库）
-     * POST /orders/personal-shipment
-     */
-    @Operation(summary = "创建个人寄件单", description = "发件人提交寄件申请，填写取件地址、收件地址及货物信息")
-    @PostMapping("/personal-shipment")
-    public Result<OrderDetailDTO> createPersonalShipment(
-            @RequestHeader(value = "userId", required = false) String userIdHeader,
-            @RequestHeader(value = "roleCode", required = false) String roleCode,
-            @RequestBody CreatePersonalShipmentRequestDTO request) {
-        if (!org.springframework.util.StringUtils.hasText(userIdHeader)) {
-            throw new BusinessException(ResultCode.UNAUTHORIZED);
-        }
-        if (!"customer".equals(roleCode)) {
-            throw new BusinessException(ResultCode.FORBIDDEN, "只有发件人账号可以创建寄件单");
-        }
-        Long userId = Long.parseLong(userIdHeader);
-        Long customerId = resolveCustomerId(userId);
-        OrderDetailDTO detail = orderService.createPersonalShipment(customerId, request);
-        return Result.success(detail);
     }
 
     /**

@@ -119,9 +119,17 @@ export const createBatch = (data: CreateBatchRequest) => {
     return request({ url: '/logistics/batches', method: 'POST', data });
 };
 
-/** 获取批次详情 */
+/** 获取批次详情（含干线路线 + 末端路线） */
 export const getBatchDetail = (batchId: number) => {
     return request({ url: `/logistics/batches/${batchId}`, method: 'GET' });
+};
+
+/**
+ * 获取批次列表
+ * @param batchStatus  0=待出发 1=干线运输中 2=已到中转站 3=末端派送中 4=全部完成
+ */
+export const listBatches = (params?: { batchStatus?: number; warehouseId?: number }) => {
+    return request({ url: '/logistics/batches', method: 'GET', params });
 };
 
 /** 获取批次下所有路线段（干线+末端） */
@@ -288,4 +296,33 @@ export const assignHubSorting = (id: number, batchId: number) => {
 /** 查询 Hub 出库记录；status: PENDING | DONE */
 export const getHubOutboundRecords = (hubId?: number, status?: string) => {
     return request({ url: '/logistics/hub-operations/outbound', method: 'GET', params: { hubId, status } });
+};
+
+// ── 管理员调度（司机预分配）───────────────────────────────────────
+
+export interface LastMileAssignment {
+    routeId: number;
+    driverId: number;
+}
+
+export interface AdminDispatchRequest {
+    trunkDriverId: number;
+    trunkVehicleId?: number;
+    lastMileAssignments: LastMileAssignment[];
+}
+
+/**
+ * 管理员对指定批次一次性调度：指定干线司机 + 预分配各末端路线司机
+ * POST /drivers/deliveries/batch/{batchId}/admin-dispatch
+ */
+export const adminDispatchBatch = (batchId: number, data: AdminDispatchRequest) => {
+    return request({ url: `/drivers/deliveries/batch/${batchId}/admin-dispatch`, method: 'POST', data });
+};
+
+/**
+ * 查询司机的预调度路线（routeStatus=-1, segmentType=2）
+ * 即管理员已预分配、等待干线到站后生效的末端路线
+ */
+export const getPreDispatchedRoutes = (driverId: number) => {
+    return request({ url: '/logistics/routes/pre-dispatched', method: 'GET', params: { driverId } });
 };

@@ -10,11 +10,6 @@ import java.util.List;
  */
 public interface DeliveryService {
     /**
-     * 获取待接单订单列表（分页）
-     */
-    PageResult<OrderDelivery> getPendingDeliveries(Long current, Long size);
-    
-    /**
      * 获取运输员的配送订单列表（分页，支持状态筛选）
      */
     PageResult<OrderDelivery> getMyDeliveries(Long driverId, Long current, Long size, Integer status, String sortField, String sortOrder);
@@ -33,12 +28,7 @@ public interface DeliveryService {
      * 当前运输员进行中的配送（已接单、运输中）
      */
     List<OrderDelivery> listInProgressDeliveries(Long driverId);
-    
-    /**
-     * 接单
-     */
-    OrderDelivery acceptDelivery(Long deliveryId, Long driverId, Long vehicleId);
-    
+
     /**
      * 更新配送状态
      */
@@ -61,28 +51,27 @@ public interface DeliveryService {
     OrderDelivery arriveAtHub(Long deliveryId, Long driverId);
 
     /**
-     * 司机主动接单附近路线段（智能调度模式）
+     * 管理员直接为已存在的 order_delivery 指派司机（直送批次专用）
      *
-     * 与传统 acceptDelivery 不同：不需要预先存在 OrderDelivery 记录，
-     * 司机从附近路线段列表中选择一条，直接创建配送单并完成路线绑定。
+     * 按 routeId 查找 deliveryStatus=0 的配送记录并直接设置司机（status→1）。
+     * 适用于 useHub=false 批次——此类批次的末端路线创建时 order_delivery 已提前生成。
      *
-     * @param routeId      目标路线段ID（logistics_route.id）
-     * @param driverId     司机ID
-     * @param vehicleId    使用车辆ID
-     * @param orderId      关联订单ID
-     * @param startAddress 路线段起点地址
-     * @param endAddress   路线段终点地址
-     * @param receiverName 收货人（末端段）
-     * @param receiverPhone 收货电话（末端段）
-     * @param routeType    路线类型（0=直送 1=Hub干线 2=末端）
-     * @param batchId      批次ID（可null）
-     * @param hubId        中转站ID（可null）
-     * @return 创建的配送记录
+     * @return true 表示找到并更新成功；false 表示未找到（应走 preAssignDriver 流程）
      */
-    OrderDelivery acceptSegment(Long routeId, Long driverId, Long vehicleId,
-                                Long orderId, String startAddress, String endAddress,
-                                String receiverName, String receiverPhone,
-                                Integer routeType, Long batchId, Long hubId);
+    boolean assignExistingDeliveryByRoute(Long routeId, Long driverId);
+
+    /**
+     * 管理员指派干线司机（Hub-and-Spoke 专用）
+     *
+     * 找到 batchId 对应的干线待接单配送记录，直接指定司机并推进到已接单状态，
+     * 同时触发 MQ #10（绑定物流路线）。不修改末端记录——末端预分配通过 logistics_route.driverId 实现。
+     *
+     * @param batchId  批次ID
+     * @param driverId 指定的司机ID
+     * @param vehicleId 车辆ID（可null）
+     * @return 更新后的干线配送记录
+     */
+    OrderDelivery adminAssignTrunkDriver(Long batchId, Long driverId, Long vehicleId);
 }
 
 

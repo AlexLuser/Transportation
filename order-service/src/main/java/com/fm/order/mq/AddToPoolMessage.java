@@ -52,26 +52,4 @@ public class AddToPoolMessage {
 
     /** 是否跨城：true=跨城，false=同城 */
     private boolean crossCity;
-
-    // ── 个人寄件扩展字段（orderType=1 时有值）──────────────────────
-
-    /**
-     * 调度起点类型：0=仓库（商户订单），2=个人取件（上门揽收）
-     */
-    private Integer dispatchOriginType;
-
-    /** 发件人取件地址文本 */
-    private String senderAddress;
-
-    /** 发件人纬度 */
-    private Double senderLat;
-
-    /** 发件人经度 */
-    private Double senderLng;
-
-    /** 发件人姓名 */
-    private String senderName;
-
-    /** 发件人电话 */
-    private String senderPhone;
 }

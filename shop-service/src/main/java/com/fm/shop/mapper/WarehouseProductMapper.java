@@ -31,6 +31,10 @@ public interface WarehouseProductMapper extends BaseMapper<WarehouseProduct> {
                     @Param("productId") Long productId, 
                     @Param("quantity") Integer quantity);
 
+    /** 仓库内各 SKU 库存合计（用于容量校验） */
+    @Select("SELECT COALESCE(SUM(stock), 0) FROM warehouse_product WHERE warehouse_id = #{warehouseId}")
+    int sumStockByWarehouse(@Param("warehouseId") Long warehouseId);
+
     /**
      * 查询指定仓库的库存，并关联商品名称（不限商家）
      */
@@ -49,7 +53,8 @@ public interface WarehouseProductMapper extends BaseMapper<WarehouseProduct> {
             "wp.stock, p.product_name AS productName, p.unit " +
             "FROM warehouse_product wp " +
             "LEFT JOIN product_info p ON wp.product_id = p.id " +
-            "WHERE wp.warehouse_id = #{warehouseId} AND wp.shop_id = #{shopId} " +
+            "WHERE wp.warehouse_id = #{warehouseId} " +
+            "AND (wp.shop_id = #{shopId} OR (wp.shop_id IS NULL AND p.shop_id = #{shopId})) " +
             "ORDER BY wp.stock DESC")
     List<Map<String, Object>> selectStockDetailByWarehouseAndShop(
             @Param("warehouseId") Long warehouseId,

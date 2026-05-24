@@ -10,7 +10,7 @@ CREATE TABLE `user` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '用户ID',
   `username` VARCHAR(100) NOT NULL COMMENT '用户名',
   `secret` VARCHAR(100) NOT NULL COMMENT '密码哈希值',
-  `permission` INT NOT NULL COMMENT '权限Flag：1=管理员(admin)，2=发件人(sender)，3=货主(merchant)，4=运输员(driver)',
+  `permission` INT NOT NULL COMMENT '权限Flag：1=管理员(admin)，2=顾客用户(customer)，3=商户用户(Shop)，4=运输员(Driver)',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
@@ -20,12 +20,12 @@ CREATE TABLE `user` (
 -- 实际使用时，密码需要通过BCrypt加密后再存储
 
 INSERT INTO `user` (`username`, `secret`, `permission`) VALUES
-('admin',        '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 1),  -- 管理员（密码：123456）
-('sender',       '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- 发件人（密码：123456）
-('merchant',     '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 3),  -- 货主（密码：123456）
-('merchant2',    '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 3),  -- 货主2（密码：123456）
-('merchant_bj',  '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 3),  -- 华北货主（密码：123456，MCMF 京仓发全国测试）
-('driver',       '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4);  -- 运输员（密码：123456）
+('admin', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 1),      -- 管理员（密码：123456）
+('customer', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- 顾客用户（密码：123456）
+('shop', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 3),      -- 商户用户（密码：123456）
+('shop2', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 3),     -- 商户用户2（密码：123456）
+('shop_bj', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 3),   -- 华北商户（密码：123456，MCMF 京仓发全国测试）
+('driver', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4);     -- 运输员（密码：123456）
 
 -- 顾客信息表
 -- 用于存储顾客用户的详细信息
@@ -75,10 +75,10 @@ CREATE TABLE `customer_address` (
 
 -- ============================================================
 -- 测试数据
--- user_id=2 对应 user 表中的 sender 用户（第2条记录）
+-- user_id=2 对应 user.sql 中的 customer 用户（第2条记录）
 -- ============================================================
 
--- 发件人信息
+-- 顾客信息
 INSERT INTO `customer_info` (`user_id`, `real_name`, `phone`, `email`, `gender`, `birthday`, `status`) VALUES
 (2, '张三', '13800138000', 'zhangsan@example.com', 1, '1990-05-15', 1);
 
@@ -360,17 +360,17 @@ INSERT INTO `product_info`
   (`shop_id`, `category_id`, `product_name`, `product_code`, `description`, `price`, `original_price`, `unit`, `weight`, `images`, `status`, `sales_count`)
 VALUES
 (1, 3, '优质坚果礼盒',   'SP001', '精选优质坚果，包含核桃、杏仁、腰果等', 128.00, 158.00, '盒', 1.5,
- '["https://example.com/images/nut1.jpg","https://example.com/images/nut2.jpg"]', 1, 26),
+ '["/images/nut_gift_box.png"]', 1, 26),
 (1, 4, '有机果汁',       'SP002', '100%纯天然有机果汁，无添加',           35.00,  45.00,  '瓶', 0.5,
- '["https://example.com/images/juice1.jpg"]',                                     1, 51),
+ '["/images/organic_juice.jpg"]', 1, 51),
 (2, 5, '商务休闲衬衫',   'SP003', '高品质商务休闲衬衫，多色可选',         299.00, 399.00, '件', 0.3,
- '["https://example.com/images/shirt1.jpg","https://example.com/images/shirt2.jpg"]', 1, 15),
+ '["/images/business_shirt.jpg"]', 1, 15),
 (2, 6, '时尚连衣裙',     'SP004', '春季新款时尚连衣裙，优雅大方',         399.00, 499.00, '件', 0.4,
- '["https://example.com/images/dress1.jpg"]',                                     1, 8),
+ '["/images/fashion_dress.jpg"]', 1, 8),
 (3, 3, '进京坚果礼盒',   'SP101', '京仓发货坚果礼盒，与上海仓商品独立库存', 128.00, 158.00, '盒', 1.5,
- '["https://example.com/images/nut1.jpg"]',                                       1, 0),
+ '["/images/beijing_nut_gift_box.jpg"]', 1, 0),
 (3, 4, '进京有机果汁',   'SP102', '京仓发货有机果汁，便于沪京双向物流演示', 35.00,  45.00,  '瓶', 0.5,
- '["https://example.com/images/juice1.jpg"]',                                     1, 0);
+ '["/images/beijing_organic_juice.jpg"]', 1, 0);
 
 -- 仓库信息（上海三仓与本地 OSM 一致；北京仓为真实种子数据，归属 national_hub 北京配送中心 id=4，用于全国/MCMF 演示）
 -- ★ warehouse_id=2（上海华东仓库）为物流测试主用仓库，lat=31.1985, longitude=121.5889
@@ -416,7 +416,7 @@ CREATE TABLE `order_info` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '订单ID',
   `order_no` VARCHAR(50) NOT NULL COMMENT '订单号（唯一）',
   `customer_id` BIGINT NOT NULL COMMENT '关联customer_info表的id（顾客）',
-  `shop_id` BIGINT DEFAULT NULL COMMENT '关联shop_info表的id（商户），个人寄件为 NULL',
+  `shop_id` BIGINT NOT NULL COMMENT '关联shop_info表的id（商户）',
   `address_id` BIGINT NOT NULL COMMENT '关联customer_address表的id（收货地址）',
   `total_amount` DECIMAL(10, 2) NOT NULL COMMENT '订单总金额（商品金额+运费）',
   `product_amount` DECIMAL(10, 2) NOT NULL COMMENT '商品总金额',
@@ -436,10 +436,6 @@ CREATE TABLE `order_info` (
   `cancel_reason` VARCHAR(255) COMMENT '取消原因',
   `remark` VARCHAR(500) COMMENT '订单备注',
   `customer_deleted` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '顾客软删除：0=正常，1=已隐藏（对顾客不可见，商户/管理员仍可见）',
-  `order_type`       TINYINT NOT NULL DEFAULT 0 COMMENT '订单类型：0=商户发货订单，1=个人寄件',
-  `sender_address`   VARCHAR(500) DEFAULT NULL COMMENT '取件地址文本快照（个人寄件用）',
-  `sender_latitude`  DOUBLE DEFAULT NULL COMMENT '取件地址纬度（个人寄件用）',
-  `sender_longitude` DOUBLE DEFAULT NULL COMMENT '取件地址经度（个人寄件用）',
   `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
@@ -459,7 +455,7 @@ CREATE TABLE `order_info` (
 CREATE TABLE `order_item` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '订单项ID',
   `order_id` BIGINT NOT NULL COMMENT '关联order_info表的id',
-  `product_id` BIGINT DEFAULT NULL COMMENT '关联product_info表的id（个人寄件时为 NULL）',
+  `product_id` BIGINT NOT NULL COMMENT '关联product_info表的id',
   `product_name` VARCHAR(200) NOT NULL COMMENT '商品名称（下单时的快照）',
   `product_image` VARCHAR(255) COMMENT '商品图片（下单时的快照）',
   `product_price` DECIMAL(10, 2) NOT NULL COMMENT '商品单价（下单时的价格）',
@@ -512,14 +508,14 @@ VALUES
 INSERT INTO `order_item`
   (`order_id`, `product_id`, `product_name`, `product_image`, `product_price`, `quantity`, `subtotal`)
 VALUES
-(1, 1, '优质坚果礼盒', 'https://example.com/images/nut1.jpg',   128.00, 1, 128.00),
-(1, 2, '有机果汁',     'https://example.com/images/juice1.jpg',  35.00, 1,  35.00);
+(1, 1, '优质坚果礼盒', '/images/nut_gift_box.png',   128.00, 1, 128.00),
+(1, 2, '有机果汁',     '/images/organic_juice.jpg',  35.00, 1,  35.00);
 
 -- order_id=2：有机果汁（待发货，可通过 POST /api/logistics/routes 创建路线）
 INSERT INTO `order_item`
   (`order_id`, `product_id`, `product_name`, `product_image`, `product_price`, `quantity`, `subtotal`)
 VALUES
-(2, 2, '有机果汁', 'https://example.com/images/juice1.jpg', 35.00, 1, 35.00);
+(2, 2, '有机果汁', '/images/organic_juice.jpg', 35.00, 1, 35.00);
 
 -- 若现有库仍为旧枚举（3=已完成、4=已取消），可执行下面一条迁移后再启动新代码：
 -- UPDATE `order_info` SET `order_status` = `order_status` + 1 WHERE `order_status` >= 3;
