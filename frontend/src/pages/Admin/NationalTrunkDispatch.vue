@@ -8,7 +8,7 @@
             <el-date-picker
               v-model="llmAsOfDate"
               type="date"
-              placeholder="模拟今日·LLM（可选）"
+              placeholder="模拟今日（可选）"
               value-format="YYYY-MM-DD"
               clearable
               style="width:188px"
@@ -99,10 +99,11 @@
 
       <el-divider style="margin-top:20px">全国物流实时网络</el-divider>
       <p class="section-hint" style="margin-bottom:8px">
-        地图实时展示所有在途干线批次（<span style="color:#409eff">■ 待发车</span>
+        地图展示干线批次与规划线路（<span style="color:#c0c4cc">■ 预规划</span>
+        <span style="color:#409eff">■ 待发车</span>
         <span style="color:#e6a23c">■ 运输中</span>
-        <span style="color:#67c23a">■ 已到达</span>），
-        执行「发车」或「标记到达」后自动刷新。
+        <span style="color:#67c23a">■ 已到达</span>）。
+        尚未激活的预规划段显示 MCMF 预估件数；有实单后显示实单数。
       </p>
       <div v-loading="topologyLoading || batchLoading">
         <el-empty
@@ -137,7 +138,7 @@
         <el-collapse v-model="mcmfCollapse" class="mcmf-collapse">
           <el-collapse-item
             v-if="(latestPlan.calibrations?.length ?? 0) > 0"
-            title="智能费用校准（LLM · 第 1 次）"
+            title="线路费率校准"
             name="llm-calib"
           >
             <p class="llm-panel-hint">以下为规划前对各运输边的费用倍率估算，已参与当次 MCMF 求解。</p>
@@ -163,7 +164,7 @@
           </el-collapse-item>
           <el-collapse-item
             v-if="latestPlan.llmFlowAdvice || latestPlan.plan?.llmAdvice"
-            title="规划结果解读（LLM · 第 2 次）"
+            title="规划分析建议"
             name="llm-advice"
           >
             <template v-if="latestPlan.llmFlowAdvice">
@@ -259,6 +260,18 @@ const networkMapEdges = computed(() =>
     }))
 )
 
+/** MCMF 规划边流量：批次尚未激活（CHAINED）时用于地图展示预估件数 */
+const planFlowByEdge = computed(() => {
+  const map: Record<string, number> = {}
+  for (const it of latestPlan.value?.items ?? []) {
+    const amount = Number(it.flowAmount) || 0
+    if (amount > 0) {
+      map[`${it.fromHubId}-${it.toHubId}`] = amount
+    }
+  }
+  return map
+})
+
 const networkMapActiveBatchCounts = computed(() => {
   const counts: Record<number, number> = {}
   for (const b of nationalBatches.value) {
@@ -270,16 +283,21 @@ const networkMapActiveBatchCounts = computed(() => {
 })
 
 const networkMapBatches = computed(() =>
-  nationalBatches.value.map((b: any) => ({
-    id: b.id,
-    fromHubId: b.fromHubId,
-    toHubId: b.toHubId,
-    itemCount: Number(b.itemCount) || 0,
-    status: b.status,
-    batchNo: b.batchNo,
-    fromHubName: b.fromHubName,
-    toHubName: b.toHubName,
-  }))
+  nationalBatches.value.map((b: any) => {
+    const itemCount = Number(b.itemCount) || 0
+    const plannedCount = planFlowByEdge.value[`${b.fromHubId}-${b.toHubId}`] ?? 0
+    return {
+      id: b.id,
+      fromHubId: b.fromHubId,
+      toHubId: b.toHubId,
+      itemCount,
+      plannedCount: itemCount > 0 ? undefined : plannedCount,
+      status: b.status,
+      batchNo: b.batchNo,
+      fromHubName: b.fromHubName,
+      toHubName: b.toHubName,
+    }
+  })
 )
 
 const nationalRealOrderTotal = computed(() =>

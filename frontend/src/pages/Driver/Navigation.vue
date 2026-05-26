@@ -53,7 +53,18 @@
                             <el-descriptions-item label="路线状态">{{ routeDetail.statusDesc ?? '-' }}</el-descriptions-item>
                             <el-descriptions-item label="出发地" :span="2">{{ routeDetail.route?.startAddress ?? '-' }}</el-descriptions-item>
                             <el-descriptions-item label="本单收货地" :span="2">
-                                {{ routeDetail.orderEndAddress ?? routeDetail.route?.endAddress ?? '-' }}
+                                <template v-if="currentStop">
+                                    <el-tag type="primary" size="small" style="margin-right:6px">
+                                        第 {{ currentStop.stopSequence }} 站
+                                    </el-tag>
+                                    {{ currentStop.endAddress }}
+                                    <span v-if="currentStop.receiverName" style="margin-left:8px;color:#909399;font-size:12px">
+                                        {{ currentStop.receiverName }} {{ currentStop.receiverPhone }}
+                                    </span>
+                                </template>
+                                <template v-else>
+                                    {{ routeDetail.orderEndAddress ?? routeDetail.route?.endAddress ?? '-' }}
+                                </template>
                             </el-descriptions-item>
                             <el-descriptions-item v-if="routeDetail.route?.estimatedArrivalTime" label="预计到达">
                                 {{ formatDate(routeDetail.route.estimatedArrivalTime) }}
@@ -61,9 +72,17 @@
                         </el-descriptions>
 
                         <!-- 司机视图：展示完整路线（含全部停靠点标记） -->
-                        <div class="section-title">路线地图</div>
+                        <div class="section-title" style="display:flex;align-items:center;gap:10px">
+                            路线地图
+                            <el-tag v-if="autoRefreshActive" type="success" size="small" effect="plain">
+                                自动刷新中
+                            </el-tag>
+                            <el-button size="small" :loading="refreshingTracks" @click="manualRefreshTracks">
+                                刷新轨迹
+                            </el-button>
+                        </div>
                         <RouteMap
-                            :key="selectedDeliveryId"
+                            :key="`${selectedDeliveryId}-${mapRefreshKey}`"
                             :start-lat="routeDetail.route?.startLatitude"
                             :start-lng="routeDetail.route?.startLongitude"
                             :end-lat="routeDetail.route?.endLatitude"
@@ -97,9 +116,9 @@
 </template>
 
 <script setup lang="ts">
-    import { ref, computed, onMounted } from 'vue';
+    import { ref, computed, onMounted, onUnmounted } from 'vue';
     import { useRoute } from 'vue-router';
-    import { getInProgressDeliveries } from '@/api/driver';
+    import { getInProgressDeliveries, getRouteStops } from '@/api/driver';
     import { getRouteByOrderId, getRouteByRouteId } from '@/api/logistics';
     import RouteMap from '@/components/RouteMap.vue';
 
@@ -111,6 +130,29 @@
     const selectedDeliveryId = ref<number | null>(null);
     const routeDetail = ref<any>(null);
     const routeError = ref('');
+
+    /** 多停靠路线的各站状态列表（按 stopSequence 升序），用于确定当前派送站点 */
+    const routeStops = ref<any[]>([]);
+
+    /**
+     * 当前应派送站点：第一个 itemStatus !== 2（未送达）的停靠点。
+     * 全部送达时为 null。
+     */
+    const currentStop = computed(() => {
+        if (!routeStops.value.length) return null;
+        return [...routeStops.value]
+            .sort((a: any, b: any) => (a.stopSequence ?? 0) - (b.stopSequence ?? 0))
+            .find((s: any) => s.itemStatus !== 2) ?? null;
+    });
+
+    /** 每次轨迹数据刷新后自增，触发 RouteMap 以新 key 重建，保证橙色已走路线同步更新 */
+    const mapRefreshKey = ref(0);
+    const refreshingTracks = ref(false);
+    let trackRefreshTimer: ReturnType<typeof setInterval> | null = null;
+
+    const autoRefreshActive = computed(() =>
+        trackRefreshTimer !== null && routeDetail.value?.route?.routeStatus === 1
+    );
 
     const nodes = computed(() => {
         const list = routeDetail.value?.nodes;
@@ -142,12 +184,66 @@
     const formatDate = (d: string | null | undefined) =>
         d ? new Date(d).toLocaleString('zh-CN', { hour12: false }) : '-';
 
+    /** 轻量级轨迹刷新：重新拉取路线详情（含最新 recentTracks），不清空当前地图 */
+    /** 多停靠路线时拉取各站状态，供 currentStop 计算当前目标站 */
+    const fetchStopsIfNeeded = async (routeId: number | null | undefined) => {
+        if (!routeId) { routeStops.value = []; return; }
+        const stopCount = routeDetail.value?.route?.stopCount ?? 1;
+        if (stopCount <= 1) { routeStops.value = []; return; }
+        try {
+            const res = await getRouteStops(routeId);
+            routeStops.value = res.data ?? [];
+        } catch { routeStops.value = []; }
+    };
+
+    const fetchAndRefreshTracks = async (silent = false) => {
+        if (!selectedDeliveryId.value) return;
+        const delivery = inProgress.value.find((d: any) => d.id === selectedDeliveryId.value);
+        if (!delivery) return;
+        if (!silent) refreshingTracks.value = true;
+        try {
+            const res = delivery.orderId
+                ? await getRouteByOrderId(delivery.orderId)
+                : await getRouteByRouteId(delivery.routeId);
+            const fresh = res.data ?? null;
+            if (fresh) {
+                routeDetail.value = fresh;
+                mapRefreshKey.value++;   // 强制 RouteMap 用新 key 重建，使橙色轨迹立即更新
+                // 同步刷新当前站状态
+                await fetchStopsIfNeeded(fresh.route?.id);
+            }
+            // 若路线已送达则停止轮询
+            if (fresh?.route?.routeStatus === 2) stopAutoRefresh();
+        } catch { /* 静默失败，不影响已有地图 */ } finally {
+            if (!silent) refreshingTracks.value = false;
+        }
+    };
+
+    const manualRefreshTracks = () => fetchAndRefreshTracks(false);
+
+    const stopAutoRefresh = () => {
+        if (trackRefreshTimer) { clearInterval(trackRefreshTimer); trackRefreshTimer = null; }
+    };
+
+    const startAutoRefresh = () => {
+        stopAutoRefresh();
+        // 路线运输中(routeStatus=1)时每 8 秒静默刷新一次轨迹
+        trackRefreshTimer = setInterval(() => {
+            if (routeDetail.value?.route?.routeStatus === 1) {
+                fetchAndRefreshTracks(true);
+            } else {
+                stopAutoRefresh();
+            }
+        }, 8000);
+    };
+
     const loadRoute = async () => {
         if (!selectedDeliveryId.value) return;
         const delivery = inProgress.value.find((d: any) => d.id === selectedDeliveryId.value);
         if (!delivery) return;
         routeError.value = '';
         routeDetail.value = null;
+        stopAutoRefresh();
         loadingRoute.value = true;
         try {
             let res;
@@ -159,12 +255,19 @@
                 res = await getRouteByRouteId(delivery.routeId);
             }
             routeDetail.value = res.data ?? null;
+            mapRefreshKey.value++;
+            // 多停靠路线时加载各站状态
+            await fetchStopsIfNeeded(routeDetail.value?.route?.id);
+            // 路线运输中时启动自动刷新
+            if (routeDetail.value?.route?.routeStatus === 1) startAutoRefresh();
         } catch (e: any) {
             routeError.value = typeof e === 'string' ? e : '加载路线失败';
         } finally {
             loadingRoute.value = false;
         }
     };
+
+    onUnmounted(stopAutoRefresh);
 
     onMounted(async () => {
         loadingList.value = true;

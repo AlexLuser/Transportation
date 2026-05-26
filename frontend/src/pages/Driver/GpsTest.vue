@@ -166,16 +166,34 @@
     const distSq = (lat1: number, lng1: number, lat2: number, lng2: number) =>
         (lat1 - lat2) ** 2 + (lng1 - lng2) ** 2;
 
+    // ── 本地进度缓存（防止多段路线重叠坐标导致回退）─────────────────────────
+    const progressKey = (routeId: number) => `gps_progress_${routeId}`;
+
+    const loadLocalProgress = (routeId: number): number => {
+        const v = localStorage.getItem(progressKey(routeId));
+        return v ? parseInt(v, 10) : 0;
+    };
+
+    const saveLocalProgress = (routeId: number, index: number) => {
+        localStorage.setItem(progressKey(routeId), String(index));
+    };
+
     /**
      * 查询后端最新轨迹点，在规划路径中找到距离最近的点的索引，
      * 返回该索引 + 1（即下一个待上报的点）。
-     * 若后端尚无轨迹记录则返回 0。
+     *
+     * 多段路线（多停靠末端）中不同段可能途经相同路口，导致全局最近邻搜索
+     * 命中前段重叠坐标，产生"回退"。
+     * 解决方案：取 max(server推算下标, localStorage缓存下标)，保证单调递增。
      */
     const resumeIndexFromServer = async (routeId: number): Promise<number> => {
+        const localIdx = loadLocalProgress(routeId);
         try {
             const res = await getLatestTrack(routeId);
             const track = res.data;
-            if (!track?.latitude || !track?.longitude || waypoints.value.length === 0) return 0;
+            if (!track?.latitude || !track?.longitude || waypoints.value.length === 0) {
+                return localIdx;
+            }
 
             let minDist = Infinity;
             let minIdx = 0;
@@ -183,11 +201,13 @@
                 const d = distSq(track.latitude, track.longitude, lat, lng);
                 if (d < minDist) { minDist = d; minIdx = i; }
             });
-            // 从最近点的下一个开始，避免重复上报同一坐标
-            return Math.min(minIdx + 1, waypoints.value.length);
+            const serverIdx = Math.min(minIdx + 1, waypoints.value.length);
+
+            // 取较大值：若 server 推算的下标比本地缓存小（重叠坐标误判），以本地为准
+            return Math.max(serverIdx, localIdx);
         } catch {
-            // 后端返回错误通常代表"尚无轨迹"，从头开始即可
-            return 0;
+            // 后端无轨迹记录，以本地缓存为准
+            return localIdx;
         }
     };
 
@@ -259,6 +279,8 @@
                 longitude: pt[1],
             });
             const track = res.data;
+            // 上报成功后立即持久化进度，防止重载/切换时回退
+            saveLocalProgress(routeInfo.value.id, index + 1);
             addLog(true, `[${index + 1}/${waypoints.value.length}] lat=${pt[0]} lng=${pt[1]} → trackId=${track?.id ?? '?'}`);
             return true;
         } catch (e: any) {
@@ -302,6 +324,10 @@
     const resetProgress = () => {
         stopAuto();
         currentIndex.value = 0;
+        // 同时清除本地进度缓存，使下次重载从头开始
+        if (routeInfo.value?.id) {
+            localStorage.removeItem(progressKey(routeInfo.value.id));
+        }
     };
 
     const clearLog = () => { logs.value = []; };

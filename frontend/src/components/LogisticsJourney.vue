@@ -38,23 +38,23 @@
                 <el-timeline-item
                     v-for="(seg, idx) in segments"
                     :key="idx"
-                    :color="timelineColor(seg.route?.routeStatus)"
-                    :hollow="isWaiting(seg.route?.routeStatus)"
+                    :color="timelineColor(inferredStatus(seg, idx))"
+                    :hollow="isWaiting(inferredStatus(seg, idx))"
                     size="large"
                     placement="top"
                 >
                     <template #default>
-                        <div class="seg-card" :class="{ 'seg-active': isActive(seg.route?.routeStatus) }">
+                        <div class="seg-card" :class="{ 'seg-active': isActive(inferredStatus(seg, idx)) }">
                             <!-- 标题行 -->
                             <div class="seg-header">
                                 <span class="seg-icon">{{ segmentIcon(seg.route?.segmentType, seg.route?.startAddress) }}</span>
                                 <span class="seg-title">{{ segmentTitle(seg) }}</span>
                                 <el-tag
-                                    :type="statusTagType(seg.route?.routeStatus)"
+                                    :type="statusTagType(inferredStatus(seg, idx))"
                                     size="small"
                                     effect="plain"
                                     class="seg-status-tag"
-                                >{{ seg.statusDesc || routeStatusText(seg.route?.routeStatus) }}</el-tag>
+                                >{{ inferredStatus(seg, idx) === 2 && seg.route?.routeStatus !== 2 ? '已送达' : (seg.statusDesc || routeStatusText(inferredStatus(seg, idx))) }}</el-tag>
                             </div>
 
                             <!-- 起讫地址 -->
@@ -147,6 +147,8 @@ interface RouteSegment {
     plannedRoute: string
     type: 1 | 2
     label?: string
+    /** 路线状态：-1=待激活, 0=待出发, 1=运输中, 2=已送达；RouteMap 据此着色（橙=已走, 蓝=预计） */
+    routeStatus?: number
 }
 
 interface HubPoint {
@@ -160,6 +162,31 @@ const props = defineProps<{
     /** 最终收货地址（来自订单信息） */
     receiverAddress?: string
 }>()
+
+// ── 工具函数 ──────────────────────────────────────────────────
+
+/**
+ * 将 GeoJSON LineString 截断至距离目标坐标最近的那个路径点（含）。
+ * 用于末端多停靠路线：顾客只应看到从 Hub 到自己这一站的路线，不应暴露后续其他客户的位置。
+ * coordinates 格式为 [[lng, lat], ...]（GeoJSON 标准）
+ */
+function truncatePlannedRoute(plannedRoute: string, targetLat: number, targetLng: number): string {
+    try {
+        const geo = JSON.parse(plannedRoute)
+        const coords: number[][] = geo.coordinates
+        if (!Array.isArray(coords) || coords.length < 2) return plannedRoute
+        let minDist = Infinity
+        let minIdx = coords.length - 1
+        coords.forEach((c, i) => {
+            // c = [lng, lat]
+            const d = (c[1] - targetLat) ** 2 + (c[0] - targetLng) ** 2
+            if (d < minDist) { minDist = d; minIdx = i }
+        })
+        return JSON.stringify({ ...geo, coordinates: coords.slice(0, minIdx + 1) })
+    } catch {
+        return plannedRoute
+    }
+}
 
 // ── 全程汇总地图数据 ──────────────────────────────────────────
 
@@ -215,7 +242,16 @@ const mapData = computed(() => {
         // 路线段（有 plannedRoute 才能画线）；传入 routeStatus 供地图区分颜色
         if (r.plannedRoute) {
             const segType: 1 | 2 = r.segmentType === 2 ? 2 : 1
-            routeSegments.push({ plannedRoute: r.plannedRoute, type: segType, label: segmentTitle(seg), routeStatus: r.routeStatus })
+
+            // 推断有效状态（司机未上传 GPS 直接到站时，下一段已激活则视当前段为已完成）
+            const effectiveStatus = inferredStatus(seg, idx)
+
+            // 末端多停靠路线：截断至顾客自己这一站，避免暴露后续其他客户的位置
+            let routeStr = r.plannedRoute
+            if (segType === 2 && seg.orderEndLat && seg.orderEndLng) {
+                routeStr = truncatePlannedRoute(r.plannedRoute, seg.orderEndLat, seg.orderEndLng)
+            }
+            routeSegments.push({ plannedRoute: routeStr, type: segType, label: segmentTitle(seg), routeStatus: effectiveStatus })
         }
 
         // 当前位置：取正在运输中的段
@@ -234,6 +270,18 @@ const mapData = computed(() => {
 })
 
 // ── 颜色与状态工具 ──────────────────────────────────────────
+
+/**
+ * 推断有效路线状态：当自身 routeStatus 未被更新为 2，但下一段已激活时，
+ * 认为当前段已完成（司机未上传 GPS 直接确认到站的场景）。
+ */
+function inferredStatus(seg: Segment, idx: number): number | undefined {
+    const status = seg.route?.routeStatus
+    if (status === 2) return 2
+    const nextSeg = idx < props.segments.length - 1 ? props.segments[idx + 1] : null
+    const nextActivated = nextSeg?.route?.routeStatus != null && nextSeg.route.routeStatus >= 0
+    return (nextActivated) ? 2 : status
+}
 
 function timelineColor(routeStatus?: number): string {
     if (routeStatus == null) return '#c0c4cc'

@@ -29,6 +29,8 @@ interface BatchLine {
     fromHubId: number
     toHubId: number
     itemCount: number
+    /** 无实单时展示的 MCMF 规划预估件数 */
+    plannedCount?: number
     status: string   // CHAINED | CREATED | DEPARTED | ARRIVED
     batchNo?: string
     fromHubName?: string
@@ -152,18 +154,20 @@ function renderMap() {
         // 白色描边（略粗，提高线路在浅色底图上的轮廓）
         L.polyline(latlngs, { color: '#fff', weight: weight + 5, opacity: 0.92, lineJoin: 'round' }).addTo(map!)
         const line = L.polyline(latlngs, { color, weight, opacity: 0.98, dashArray: dash, lineJoin: 'round' }).addTo(map!)
+        const { count: displayCount, isPlanned } = batchDisplayCount(batch)
+        const countDesc = isPlanned ? `预估 <b>${displayCount}</b> 件` : `<b>${displayCount}</b> 件`
         line.bindPopup(`
             <div style="min-width:180px">
               <b style="font-size:14px">${batch.fromHubName || from.city || from.name} → ${batch.toHubName || to.city || to.name}</b><br>
               <span style="color:${color};font-weight:600">${statusLabel(batch.status)}</span>
-              &nbsp;·&nbsp; <b>${batch.itemCount}</b> 件<br>
+              &nbsp;·&nbsp; ${countDesc}<br>
               <span style="font-size:11px;color:#909399">${batch.batchNo ?? ''}</span>
             </div>`)
 
         drawArrowAlongCurve(a, ctrl, b, color)
 
         const [midLat, midLng] = quadMid(a, ctrl, b)
-        const countText = `${batch.itemCount} 件`
+        const countText = isPlanned ? `预估 ${displayCount} 件` : `${displayCount} 件`
         const labelIcon = L.divIcon({
             className: 'national-map-batch-label-host',
             html: `<div class="national-map-batch-label" style="--edge-color:${color}">${countText}</div>`,
@@ -224,6 +228,7 @@ function renderMap() {
             div.innerHTML = `
               <div style="background:rgba(255,255,255,0.94);padding:8px 12px;border-radius:8px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.18);line-height:1.9">
                 <div style="font-weight:700;margin-bottom:3px;font-size:13px">实时物流状态</div>
+                <div><span style="display:inline-block;width:26px;height:2px;background:#c0c4cc;vertical-align:middle;border-radius:2px;margin-right:5px;border-top:2px dashed #c0c4cc"></span>预规划批次（预估件数）</div>
                 <div><span style="display:inline-block;width:26px;height:4px;background:#409eff;vertical-align:middle;border-radius:2px;margin-right:5px"></span>待发车批次</div>
                 <div><span style="display:inline-block;width:26px;height:4px;background:#e6a23c;vertical-align:middle;border-radius:2px;margin-right:5px;border-bottom:2px dashed #e6a23c"></span>运输中批次</div>
                 <div><span style="display:inline-block;width:26px;height:4px;background:#67c23a;vertical-align:middle;border-radius:2px;margin-right:5px"></span>已到达批次</div>
@@ -252,6 +257,15 @@ function statusLabel(status: string) {
         DISPATCHED: '已调度',
     }
     return m[status] ?? '进行中'
+}
+
+/** 实单优先；无实单时用规划预估件数 */
+function batchDisplayCount(batch: BatchLine) {
+    const actual = Number(batch.itemCount) || 0
+    if (actual > 0) return { count: actual, isPlanned: false }
+    const planned = Number(batch.plannedCount) || 0
+    if (planned > 0) return { count: planned, isPlanned: true }
+    return { count: 0, isPlanned: false }
 }
 
 onMounted(() => renderMap())
