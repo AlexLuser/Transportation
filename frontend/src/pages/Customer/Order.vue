@@ -132,6 +132,7 @@
                     />
                     <LogisticsJourney
                         v-else
+                        mode="customer"
                         :segments="orderJourney ?? []"
                         :receiver-address="currentDetail.order?.receiverAddress || currentDetail.address?.detailAddress"
                     />

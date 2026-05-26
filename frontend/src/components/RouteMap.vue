@@ -80,6 +80,8 @@
         mapHeight?: number
         /** 批次总览等重叠场景：图层开关 + 悬停高亮 + 点击置顶 */
         layerInteraction?: boolean
+        /** 简化图例：不区分干线/末端（顾客视图） */
+        simpleLegend?: boolean
     }>()
 
     const mapEl = ref<HTMLElement | null>(null)
@@ -358,10 +360,12 @@
                         <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#409eff;margin-right:5px"></span>当前位置</div>
                         ${hasSegments ? `<div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#e6a23c;margin-right:5px"></span>中转站(Hub)</div>` : ''}
                         <div><span style="display:inline-block;width:24px;height:4px;background:#ff7b00;margin-right:5px;vertical-align:middle;border-radius:2px"></span>已走路程</div>
-                        ${hasSegments
+                        ${hasSegments && !props.simpleLegend
                             ? `<div><span style="display:inline-block;width:24px;height:4px;background:#1677ff;margin-right:5px;vertical-align:middle;border-radius:2px"></span>干线预计</div>
                                <div><span style="display:inline-block;width:24px;height:4px;background:#67c23a;margin-right:5px;vertical-align:middle;border-radius:2px"></span>末端预计</div>`
-                            : `<div><span style="display:inline-block;width:24px;height:4px;background:#1677ff;margin-right:5px;vertical-align:middle;border-radius:2px"></span>预计路线</div>`}
+                            : hasSegments
+                                ? `<div><span style="display:inline-block;width:24px;height:4px;background:#1677ff;margin-right:5px;vertical-align:middle;border-radius:2px"></span>预计路线</div>`
+                                : `<div><span style="display:inline-block;width:24px;height:4px;background:#1677ff;margin-right:5px;vertical-align:middle;border-radius:2px"></span>预计路线</div>`}
                     </div>`
                     return div
                 },

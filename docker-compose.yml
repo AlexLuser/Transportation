@@ -28,8 +28,8 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
       - ./database/all.sql:/docker-entrypoint-initdb.d/01_all.sql:ro
-      - ./database/logistics_history_test.sql:/docker-entrypoint-initdb.d/02_logistics_history_test.sql:ro
-      # 03和04因collation冲突需手动执行：docker exec -i transport-mysql bash -c 'mysql -u root -prootpassword transportation' < database/mcmf_test_data.sql
+      # mcmf_test_data.sql 含临时表需手动执行：
+      # docker exec -i transport-mysql mysql -u root -prootpassword --default-character-set=utf8mb4 transportation < database/mcmf_test_data.sql
     networks:
       - transport-net
     healthcheck:

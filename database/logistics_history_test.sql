@@ -13,21 +13,21 @@ SET NAMES utf8mb4;
 -- ──────────────────────────────────────────
 -- 新用户（user_id 20-23，追加到已有 1-5 之后）
 -- ──────────────────────────────────────────
-INSERT INTO `user` (`id`, `username`, `secret`, `permission`) VALUES
+INSERT IGNORE INTO `user` (`id`, `username`, `secret`, `permission`) VALUES
 (20, 'customer2', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- 李明
 (21, 'customer3', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- 王芳
 (22, 'driver2',   '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4),  -- 陈刚
 (23, 'driver3',   '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4);  -- 赵磊
 
 -- 顾客信息
-INSERT INTO `customer_info`
+INSERT IGNORE INTO `customer_info`
   (`id`, `user_id`, `real_name`, `phone`, `email`, `gender`, `birthday`, `status`)
 VALUES
 (2, 20, '李明', '13900139001', 'liming@example.com',   1, '1988-08-20', 1),
 (3, 21, '王芳', '13600136002', 'wangfang@example.com', 2, '1992-03-12', 1);
 
 -- 收货地址（addr_id 3-12，追加到已有 1-2 之后）
-INSERT INTO `customer_address`
+INSERT IGNORE INTO `customer_address`
   (`id`, `customer_id`, `receiver_name`, `receiver_phone`,
    `province`, `city`, `district`, `detail_address`, `postal_code`,
    `is_default`, `latitude`, `longitude`)
@@ -44,7 +44,7 @@ VALUES
 (12, 3, '王芳', '13600136002', '上海市', '上海市', '杨浦区', '上海市杨浦区国定路335号', '200433', 0, 31.3030, 121.5019);
 
 -- 运输员信息（driver_id 2-3）
-INSERT INTO `driver_info`
+INSERT IGNORE INTO `driver_info`
   (`id`, `user_id`, `real_name`, `phone`, `email`, `id_card`, `gender`, `birthday`,
    `license_number`, `license_type`, `license_expire_date`, `status`)
 VALUES
@@ -54,7 +54,7 @@ VALUES
  'SH0003456789012', 'B2', '2029-12-31', 1);
 
 -- 车辆信息（vehicle_id 3-4）
-INSERT INTO `vehicle_info`
+INSERT IGNORE INTO `vehicle_info`
   (`id`, `driver_id`, `vehicle_type`, `vehicle_brand`, `vehicle_model`,
    `license_plate`, `load_capacity`, `volume_capacity`, `vehicle_status`)
 VALUES
@@ -64,7 +64,7 @@ VALUES
 -- ──────────────────────────────────────────
 -- 历史订单（order_id 3-32，全部已完成 status=4）
 -- ──────────────────────────────────────────
-INSERT INTO `order_info`
+INSERT IGNORE INTO `order_info`
   (`id`, `order_no`, `customer_id`, `shop_id`, `address_id`, `warehouse_id`,
    `total_amount`, `product_amount`, `shipping_fee`,
    `order_status`, `payment_status`, `payment_time`, `shipping_time`, `complete_time`,
@@ -102,7 +102,7 @@ VALUES
 (32, 'ORD_HIST_00000032', 2, 1, 11, 3, 45.00, 35.00, 10.00, 4, 1, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '07:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '10:40:00'), NULL, 0);
 
 -- 订单项（每订单1件商品）
-INSERT INTO `order_item`
+INSERT IGNORE INTO `order_item`
   (`order_id`, `product_id`, `product_name`, `product_image`, `product_price`, `quantity`, `subtotal`)
 VALUES
 (3, 1, '优质坚果礼盒', 'https://example.com/images/prod1.jpg', 128.00, 1, 128.00),
@@ -137,7 +137,7 @@ VALUES
 (32, 2, '有机果汁', 'https://example.com/images/prod2.jpg', 35.00, 1, 35.00);
 
 -- 配送记录（delivery_id 2-31，全部已送达 delivery_status=3）
-INSERT INTO `order_delivery`
+INSERT IGNORE INTO `order_delivery`
   (`id`, `order_id`, `driver_id`, `vehicle_id`, `delivery_status`,
    `accept_time`, `pickup_time`, `delivery_time`,
    `delivery_address`, `receiver_name`, `receiver_phone`, `remark`)
@@ -176,7 +176,7 @@ VALUES
 -- ──────────────────────────────────────────
 -- 物流路线（route_id 2-31）
 -- ──────────────────────────────────────────
-INSERT INTO `logistics_route`
+INSERT IGNORE INTO `logistics_route`
   (`id`, `route_no`, `order_id`, `delivery_id`, `driver_id`, `warehouse_id`,
    `start_address`, `start_lat`, `start_lng`,
    `end_address`, `end_lat`, `end_lng`,
@@ -366,7 +366,7 @@ VALUES
  '李明', '13900139001', NULL, TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '09:30:00'), TIMESTAMP(DATE_SUB(DATE(NOW()), INTERVAL 31 DAY), '10:40:00'));
 
 -- 里程碑节点（每条路线出发点+目的地，共60个）
-INSERT INTO `logistics_node`
+INSERT IGNORE INTO `logistics_node`
   (`route_id`, `node_type`, `node_name`, `node_address`,
    `latitude`, `longitude`, `sequence_no`,
    `planned_arrive_time`, `actual_arrive_time`, `node_status`)
@@ -435,7 +435,7 @@ VALUES
 -- ──────────────────────────────────────────
 -- 轨迹点（主数据约 300 条；若启用 enrich 则追加统计增强样本）
 -- ──────────────────────────────────────────
-INSERT INTO `logistics_track`
+INSERT IGNORE INTO `logistics_track`
   (`route_id`, `driver_id`, `latitude`, `longitude`,
    `altitude`, `speed`, `heading`, `accuracy`, `address`, `track_time`)
 VALUES

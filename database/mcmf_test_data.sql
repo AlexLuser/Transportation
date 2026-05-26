@@ -149,7 +149,7 @@ ORDER BY a.`customer_id`, a.`id`;
 
 -- 接续上一段：沪→西安(7)（利用武汉/郑州—西安边）
 INSERT INTO `_mcmf_orders` (`seq`, `address_id`, `warehouse_id`, `origin_hub_id`, `dest_hub_id`, `shop_id`, `remark`)
-SELECT (SELECT MAX(`seq`) FROM `_mcmf_orders`) + n.n, @addr_xian, @wh_shanghai, 3, 7, @shop_shanghai, CONCAT('MCMF批量 沪→陕 #', n.n)
+SELECT @seq_bj_sh + n.n, @addr_xian, @wh_shanghai, 3, 7, @shop_shanghai, CONCAT('MCMF批量 沪→陕 #', n.n)
 FROM (SELECT 1 AS n UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5) n;
 
 INSERT INTO `order_info`

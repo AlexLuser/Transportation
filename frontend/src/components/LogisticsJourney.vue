@@ -13,7 +13,9 @@
                         <span class="legend-dot" style="background:#67c23a"></span>发货地
                         <span class="legend-line" style="background:#ff7b00"></span>已走路程
                         <span class="legend-line" style="background:#1677ff"></span>预计路线
-                        <span class="legend-star">★</span>中转站
+                        <template v-if="mode !== 'customer'">
+                            <span class="legend-star">★</span>中转站
+                        </template>
                         <span class="legend-dot" style="background:#f56c6c"></span>收货地
                     </div>
                 </div>
@@ -30,6 +32,7 @@
                     :segments="mapData.routeSegments"
                     :recent-tracks="mapData.recentTracks"
                     :map-height="420"
+                    :simple-legend="mode === 'customer'"
                 />
             </div>
 
@@ -161,6 +164,8 @@ const props = defineProps<{
     segments: Segment[]
     /** 最终收货地址（来自订单信息） */
     receiverAddress?: string
+    /** 展示模式：customer=顾客简化版(已走/未走)，admin=管理员完整版(干线/末端区分)，默认 admin */
+    mode?: 'customer' | 'admin'
 }>()
 
 // ── 工具函数 ──────────────────────────────────────────────────
@@ -241,7 +246,7 @@ const mapData = computed(() => {
 
         // 路线段（有 plannedRoute 才能画线）；传入 routeStatus 供地图区分颜色
         if (r.plannedRoute) {
-            const segType: 1 | 2 = r.segmentType === 2 ? 2 : 1
+            const segType: 1 | 2 = (props.mode === 'customer') ? 1 : (r.segmentType === 2 ? 2 : 1)
 
             // 推断有效状态（司机未上传 GPS 直接到站时，下一段已激活则视当前段为已完成）
             const effectiveStatus = inferredStatus(seg, idx)
@@ -314,7 +319,6 @@ function routeStatusText(routeStatus?: number): string {
 function segmentIcon(segmentType?: number, startAddress?: string): string {
     if (segmentType === 3) return '🚄'
     if (segmentType === 1) {
-        // 全国Hub→本地分拨中心（跨城到达后城市内转运）vs 仓库→本地中转站
         return startAddress?.includes('干线到达') ? '🔄' : '🏭'
     }
     if (segmentType === 2) return '🚚'
@@ -325,7 +329,6 @@ function segmentTitle(seg: Segment): string {
     const t = seg.route?.segmentType
     if (t === 3) return '跨城干线运输'
     if (t === 1) {
-        // 区分：全国枢纽→本地分拨中心（跨城到达后） vs 发货仓库→本地中转站（同城批次）
         return seg.route?.startAddress?.includes('干线到达')
             ? '城市内转运（枢纽→分拨中心）'
             : '干线配送（仓库→中转站）'
