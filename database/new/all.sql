@@ -25,15 +25,7 @@ INSERT INTO `user` (`username`, `secret`, `permission`) VALUES
 ('shop', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 3),      -- 商户用户（密码：123456）
 ('shop2', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 3),     -- 商户用户2（密码：123456）
 ('shop_bj', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 3),   -- 华北商户（密码：123456，MCMF 京仓发全国测试）
-('driver', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4),     -- 运输员（密码：123456）
-('customer2', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- 新顾客（密码：123456）
-('customer3', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- 新顾客（密码：123456）
-('customer4', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- 新顾客（密码：123456）
-('customer5', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- 新顾客（密码：123456）
-('customer6', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- 新顾客（密码：123456）
-('driver2', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4),    -- 新运输员（密码：123456）
-('driver3', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4),    -- 新运输员（密码：123456）
-('driver4', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4);    -- 新运输员（密码：123456）
+('driver', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4);     -- 运输员（密码：123456）
 
 -- 顾客信息表
 -- 用于存储顾客用户的详细信息
@@ -88,12 +80,7 @@ CREATE TABLE `customer_address` (
 
 -- 顾客信息
 INSERT INTO `customer_info` (`user_id`, `real_name`, `phone`, `email`, `gender`, `birthday`, `status`) VALUES
-(2, '张三', '13800138000', 'zhangsan@example.com', 1, '1990-05-15', 1),
-(7, '李梅', '13900139001', 'limei@example.com', 2, '1992-03-08', 1),
-(8, '王强', '13900139002', 'wangqiang@example.com', 1, '1988-11-20', 1),
-(9, '陈静', '13900139003', 'chenjing@example.com', 2, '1995-07-15', 1),
-(10, '陆峰', '13900139004', 'lufeng@example.com', 1, '1990-09-01', 1),
-(11, '林晓', '13900139005', 'linxiao@example.com', 2, '1996-04-22', 1);
+(2, '张三', '13800138000', 'zhangsan@example.com', 1, '1990-05-15', 1);
 
 -- 收货地址（均为上海，与 OSM 数据范围一致）
 -- customer_id=1 对应上面插入的顾客记录
@@ -103,25 +90,7 @@ VALUES
 -- 默认地址：上海浦东（物流测试主用地址，order_id=1 的收货地址，坐标与 logistics.sql 一致）
 (1, '张三', '13800138000', '上海市', '上海市', '浦东新区', '浦东新区陆家嘴环路1000号', '200120', 1, 31.2356, 121.5050),
 -- 备用地址：上海静安
-(1, '张三', '13800138000', '上海市', '上海市', '静安区', '静安区南京西路688号', '200041', 0, 31.2289, 121.4490),
--- 李梅（customer_id=2）
-(2, '李梅', '13900139001', '上海市', '上海市', '浦东新区', '浦东新区唐陆公路88号唐镇商务楼', '201210', 1, 31.2050, 121.6380),
-(2, '李梅', '13900139001', '上海市', '上海市', '闵行区', '闵行区申虹路500号虹桥商务区', '201103', 0, 31.1980, 121.3580),
-(2, '李梅', '13900139001', '上海市', '上海市', '松江区', '松江区岳阳街道江川路100号', '201620', 0, 31.0220, 121.2100),
--- 王强（customer_id=3）
-(3, '王强', '13900139002', '上海市', '上海市', '闵行区', '闵行区漕宝路3188号七宝万科广场', '201101', 1, 31.1590, 121.3730),
-(3, '王强', '13900139002', '上海市', '上海市', '松江区', '松江区九亭镇沪松公路2222号', '201615', 0, 31.0420, 121.2380),
-(3, '王强', '13900139002', '上海市', '上海市', '浦东新区', '浦东新区张江镇博云路100号张江高科', '201203', 0, 31.2060, 121.6050),
--- 陈静（customer_id=4）
-(4, '陈静', '13900139003', '上海市', '上海市', '松江区', '松江区文诚路100号松江大学城', '201620', 1, 31.0230, 121.2350),
-(4, '陈静', '13900139003', '上海市', '上海市', '浦东新区', '浦东新区金港路100号金桥工业园', '201206', 0, 31.2350, 121.5980),
-(4, '陈静', '13900139003', '上海市', '上海市', '长宁区', '长宁区虹桥路2000号虹桥国际广场', '200051', 0, 31.1988, 121.3650),
--- 陆峰（customer_id=5）
-(5, '陆峰', '13900139004', '上海市', '上海市', '浦东新区', '浦东新区花木路50号花木综合市场', '201204', 1, 31.2160, 121.5780),
-(5, '陆峰', '13900139004', '上海市', '上海市', '松江区', '松江区佘山镇祥和路100号', '201602', 0, 31.0700, 121.1750),
--- 林晓（customer_id=6）
-(6, '林晓', '13900139005', '上海市', '上海市', '闵行区', '闵行区颛桥镇颛兴路200号', '201108', 1, 31.1200, 121.3850),
-(6, '林晓', '13900139005', '上海市', '上海市', '浦东新区', '浦东新区三林镇塘桥路300号', '200124', 0, 31.1670, 121.5200);
+(1, '张三', '13800138000', '上海市', '上海市', '静安区', '静安区南京西路688号', '200041', 0, 31.2289, 121.4490);
 
 -- 运输员服务数据库表
 -- 包含运输员信息、车辆信息、订单配送等
@@ -222,13 +191,7 @@ INSERT INTO `driver_info`
    `license_number`, `license_type`, `license_expire_date`, `status`)
 VALUES
 (6, '李四', '13700137000', 'lisi@example.com', '310101199001011234', 1, '1990-01-01',
- 'SH0001234567890', 'C1', '2030-12-31', 1),
-(12, '赵磊', '13600136001', 'zhaolei@example.com', '310101199205201234', 1, '1992-05-20',
- 'SH0002234567890', 'C1', '2031-06-30', 1),
-(13, '孙芳', '13600136002', 'sunfang@example.com', '310101199408153456', 2, '1994-08-15',
- 'SH0003334567890', 'C1', '2032-08-31', 1),
-(14, '周杰', '13600136003', 'zhoujie@example.com', '310101199112100987', 1, '1991-12-10',
- 'SH0004434567890', 'C1', '2030-12-31', 1);
+ 'SH0001234567890', 'C1', '2030-12-31', 1);
 
 -- 车辆信息（归属于 driver_id=1，驻扎上海，使用沪牌）
 -- vehicle_id=1 为物流测试使用的车辆
@@ -237,10 +200,7 @@ INSERT INTO `vehicle_info`
    `load_capacity`, `volume_capacity`, `vehicle_status`)
 VALUES
 (1, '小型货车', '东风', 'DF-100', '沪A12345', 2.5, 10.0, 1),  -- ★ 物流测试使用
-(1, '中型货车', '解放', 'JF-200', '沪B67890', 5.0, 20.0, 0),  -- 当前停用
-(2, '小型货车', '江铃', 'JMC-T5', '沪C11111', 1.5, 8.0, 1),
-(3, '小型货车', '福田', 'FT-G7', '沪D22222', 1.5, 8.0, 1),
-(4, '小型货车', '长安', 'SC1031', '沪G33333', 2.0, 10.0, 1);
+(1, '中型货车', '解放', 'JF-200', '沪B67890', 5.0, 20.0, 0);  -- 当前停用
 
 -- 订单配送记录（order_id=1 的配送，与 logistics.sql 中 delivery_id=1 对应）
 -- ★ delivery_id=1，delivery_status=2（运输中），与 logistics_route 中的 delivery_id 保持一致
@@ -400,17 +360,17 @@ INSERT INTO `product_info`
   (`shop_id`, `category_id`, `product_name`, `product_code`, `description`, `price`, `original_price`, `unit`, `weight`, `images`, `status`, `sales_count`)
 VALUES
 (1, 3, '优质坚果礼盒',   'SP001', '精选优质坚果，包含核桃、杏仁、腰果等', 128.00, 158.00, '盒', 1.5,
- '["/images/nut_gift_box.png"]', 1, 26),
+ '["https://example.com/images/nut1.jpg","https://example.com/images/nut2.jpg"]', 1, 26),
 (1, 4, '有机果汁',       'SP002', '100%纯天然有机果汁，无添加',           35.00,  45.00,  '瓶', 0.5,
- '["/images/organic_juice.jpg"]', 1, 51),
+ '["https://example.com/images/juice1.jpg"]',                                     1, 51),
 (2, 5, '商务休闲衬衫',   'SP003', '高品质商务休闲衬衫，多色可选',         299.00, 399.00, '件', 0.3,
- '["/images/business_shirt.jpg"]', 1, 15),
+ '["https://example.com/images/shirt1.jpg","https://example.com/images/shirt2.jpg"]', 1, 15),
 (2, 6, '时尚连衣裙',     'SP004', '春季新款时尚连衣裙，优雅大方',         399.00, 499.00, '件', 0.4,
- '["/images/fashion_dress.jpg"]', 1, 8),
+ '["https://example.com/images/dress1.jpg"]',                                     1, 8),
 (3, 3, '进京坚果礼盒',   'SP101', '京仓发货坚果礼盒，与上海仓商品独立库存', 128.00, 158.00, '盒', 1.5,
- '["/images/beijing_nut_gift_box.jpg"]', 1, 0),
+ '["https://example.com/images/nut1.jpg"]',                                       1, 0),
 (3, 4, '进京有机果汁',   'SP102', '京仓发货有机果汁，便于沪京双向物流演示', 35.00,  45.00,  '瓶', 0.5,
- '["/images/beijing_organic_juice.jpg"]', 1, 0);
+ '["https://example.com/images/juice1.jpg"]',                                     1, 0);
 
 -- 仓库信息（上海三仓与本地 OSM 一致；北京仓为真实种子数据，归属 national_hub 北京配送中心 id=4，用于全国/MCMF 演示）
 -- ★ warehouse_id=2（上海华东仓库）为物流测试主用仓库，lat=31.1985, longitude=121.5889
@@ -548,14 +508,14 @@ VALUES
 INSERT INTO `order_item`
   (`order_id`, `product_id`, `product_name`, `product_image`, `product_price`, `quantity`, `subtotal`)
 VALUES
-(1, 1, '优质坚果礼盒', '/images/nut_gift_box.png',   128.00, 1, 128.00),
-(1, 2, '有机果汁',     '/images/organic_juice.jpg',  35.00, 1,  35.00);
+(1, 1, '优质坚果礼盒', 'https://example.com/images/nut1.jpg',   128.00, 1, 128.00),
+(1, 2, '有机果汁',     'https://example.com/images/juice1.jpg',  35.00, 1,  35.00);
 
 -- order_id=2：有机果汁（待发货，可通过 POST /api/logistics/routes 创建路线）
 INSERT INTO `order_item`
   (`order_id`, `product_id`, `product_name`, `product_image`, `product_price`, `quantity`, `subtotal`)
 VALUES
-(2, 2, '有机果汁', '/images/organic_juice.jpg', 35.00, 1, 35.00);
+(2, 2, '有机果汁', 'https://example.com/images/juice1.jpg', 35.00, 1, 35.00);
 
 -- 若现有库仍为旧枚举（3=已完成、4=已取消），可执行下面一条迁移后再启动新代码：
 -- UPDATE `order_info` SET `order_status` = `order_status` + 1 WHERE `order_status` >= 3;
@@ -1505,3 +1465,204 @@ CREATE TABLE `hub_sorting_record` (
   INDEX `idx_order_id` (`order_id`),
   INDEX `idx_dest_hub_id` (`dest_hub_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Hub分拣记录';
+
+-- ============================================================
+-- 末端调度演示补充数据
+-- 三个上海本地 Hub（logistics_hub）：
+--   Hub1 浦东分拨中心  id=1  lat=31.2180  lng=121.6200
+--   Hub2 虹桥分拨中心  id=2  lat=31.1950  lng=121.3300
+--   Hub3 松江分拨中心  id=3  lat=31.0300  lng=121.2200
+-- 新增：3位上海顾客（收货地址围绕三个本地Hub）
+--       3家外省商户及其仓库（广州/南京/杭州）
+-- ============================================================
+
+-- 新增用户（user_id=7~12，密码统一 123456）
+INSERT INTO `user` (`username`, `secret`, `permission`) VALUES
+('customer2', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- user_id=7  顾客李梅
+('customer3', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- user_id=8  顾客王强
+('customer4', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- user_id=9  顾客陈静
+('shop_gz',   '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 3),  -- user_id=10 广州南国优选
+('shop_nj',   '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 3),  -- user_id=11 南京苏货直供
+('shop_hz',   '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 3);  -- user_id=12 杭州西子精品
+
+-- 新增顾客信息（customer_id=2,3,4）
+INSERT INTO `customer_info` (`user_id`, `real_name`, `phone`, `email`, `gender`, `birthday`, `status`) VALUES
+(7,  '李梅', '13900139001', 'limei@example.com',      2, '1992-03-08', 1),  -- customer_id=2
+(8,  '王强', '13900139002', 'wangqiang@example.com',  1, '1988-11-20', 1),  -- customer_id=3
+(9,  '陈静', '13900139003', 'chenjing@example.com',   2, '1995-07-15', 1);  -- customer_id=4
+
+-- 新增上海收货地址（每位顾客 2 条，分布在三个本地Hub附近）
+--   Hub1 浦东分拨中心 → 浦东唐镇/金桥
+--   Hub2 虹桥分拨中心 → 闵行申虹/七宝
+--   Hub3 松江分拨中心 → 松江九亭/新城
+INSERT INTO `customer_address`
+  (`customer_id`, `receiver_name`, `receiver_phone`,
+   `province`, `city`, `district`, `detail_address`, `postal_code`,
+   `is_default`, `latitude`, `longitude`)
+VALUES
+-- 李梅：浦东唐镇（Hub1 附近约 3 km）
+(2, '李梅', '13900139001', '上海市', '上海市', '浦东新区', '浦东新区唐陆公路88号唐镇商务楼',    '201210', 1, 31.2050, 121.6380),
+-- 李梅：闵行申虹（Hub2 附近约 2 km）
+(2, '李梅', '13900139001', '上海市', '上海市', '闵行区',   '闵行区申虹路500号虹桥商务区',        '201103', 0, 31.1980, 121.3580),
+-- 王强：闵行七宝（Hub2 附近约 5 km）
+(3, '王强', '13900139002', '上海市', '上海市', '闵行区',   '闵行区漕宝路3188号七宝万科广场',      '201101', 1, 31.1590, 121.3730),
+-- 王强：松江九亭（Hub3 附近约 2 km）
+(3, '王强', '13900139002', '上海市', '上海市', '松江区',   '松江区九亭镇沪松公路2222号',          '201615', 0, 31.0420, 121.2380),
+-- 陈静：松江新城（Hub3 附近约 2 km）
+(4, '陈静', '13900139003', '上海市', '上海市', '松江区',   '松江区文诚路100号松江大学城',         '201620', 1, 31.0230, 121.2350),
+-- 陈静：浦东金桥（Hub1 附近约 3 km）
+(4, '陈静', '13900139003', '上海市', '上海市', '浦东新区', '浦东新区金港路100号金桥工业园',       '201206', 0, 31.2350, 121.5980);
+
+-- 新增外省商户（shop_id=4,5,6）
+INSERT INTO `shop_info`
+  (`user_id`, `shop_name`, `shop_phone`, `shop_email`, `description`, `business_license`, `status`)
+VALUES
+(10, '广州南国优选', '020-83001234',   'shopgz@example.com',  '广州特产食品直供，番禺仓发货全国', '91440101MA00001001', 1),
+(11, '南京苏货直供', '025-84001234',   'shopnj@example.com',  '南京特产食品，江宁仓发货',         '91320100MA00001002', 1),
+(12, '杭州西子精品', '0571-88001234',  'shophz@example.com',  '杭州优质龙井茶，萧山仓发货',       '91330100MA00001003', 1);
+
+-- 新增商品（product_id=7,8,9）
+INSERT INTO `product_info`
+  (`shop_id`, `category_id`, `product_name`, `product_code`, `description`,
+   `price`, `original_price`, `unit`, `weight`, `images`, `status`, `sales_count`)
+VALUES
+(4, 3, '广州南国特产礼盒', 'GZ001', '广州特色小吃礼盒，含多种南粤风味零食',
+ 99.00,  128.00, '盒', 1.2, '["https://example.com/images/gz1.jpg"]',  1, 0),
+(5, 3, '南京盐水鸭礼盒',   'NJ001', '正宗南京盐水鸭，真空包装，品质保证',
+ 88.00,  108.00, '盒', 1.8, '["https://example.com/images/nj1.jpg"]',  1, 0),
+(6, 3, '杭州西湖龙井礼盒', 'HZ001', '明前龙井精选，礼盒装，送礼佳品',
+ 168.00, 218.00, '盒', 0.5, '["https://example.com/images/hz1.jpg"]',  1, 0);
+
+-- 新增外省仓库（warehouse_id=5,6,7）
+-- affiliated_hub_id 对应 national_hub：广州=5，南京=9，杭州=12
+INSERT INTO `warehouse`
+  (`warehouse_name`, `warehouse_phone`, `province`, `city`, `district`,
+   `detail_address`, `postal_code`, `capacity`, `latitude`, `longitude`,
+   `affiliated_hub_id`, `status`)
+VALUES
+('广州番禺履约中心', '020-83001235',  '广东省', '广州市', '番禺区',
+ '番禺区市广路123号物流园（广州南国优选）', '511400', 6000, 23.1290, 113.2640,  5, 1),
+('南京江宁履约中心', '025-84001235',  '江苏省', '南京市', '江宁区',
+ '江宁区将军大道88号物流园（南京苏货直供）','211100', 5000, 32.0580, 118.7900,  9, 1),
+('杭州萧山履约中心', '0571-88001235', '浙江省', '杭州市', '萧山区',
+ '萧山区机场路456号物流园（杭州西子精品）','311200', 5000, 30.2720, 120.2020, 12, 1);
+
+-- 仓库-商品关联（含库存，shop_id 字段已由前文 ALTER 添加，此处显式赋值）
+INSERT INTO `warehouse_product` (`warehouse_id`, `product_id`, `shop_id`, `stock`) VALUES
+(5, 7, 4, 500),   -- 广州番禺仓 / 广州南国特产礼盒
+(6, 8, 5, 300),   -- 南京江宁仓 / 南京盐水鸭礼盒
+(7, 9, 6, 400);   -- 杭州萧山仓 / 杭州西湖龙井礼盒
+
+-- 仓库-商家关联
+INSERT IGNORE INTO `warehouse_shop` (`warehouse_id`, `shop_id`, `role`) VALUES
+(5, 4, 'OWNER'),  -- 广州番禺仓 → 广州南国优选
+(6, 5, 'OWNER'),  -- 南京江宁仓 → 南京苏货直供
+(7, 6, 'OWNER');  -- 杭州萧山仓 → 杭州西子精品
+
+-- ============================================================
+-- 末端调度演示补充：新增上海本地司机及车辆
+-- 驻扎三个本地Hub附近，用于演示浦东/虹桥/松江末端派送
+-- user_id=13~15（permission=4 运输员）
+-- ============================================================
+
+INSERT INTO `user` (`username`, `secret`, `permission`) VALUES
+('driver2', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4),  -- user_id=13 浦东司机
+('driver3', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4),  -- user_id=14 虹桥司机
+('driver4', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 4);  -- user_id=15 松江司机
+
+INSERT INTO `driver_info`
+  (`user_id`, `real_name`, `phone`, `email`, `id_card`, `gender`, `birthday`,
+   `license_number`, `license_type`, `license_expire_date`, `status`)
+VALUES
+-- driver_id=2：驻浦东，负责 Hub1 浦东分拨中心附近末端派送
+(13, '赵磊', '13600136001', 'zhaolei@example.com',   '310101199205201234', 1, '1992-05-20',
+ 'SH0002234567890', 'C1', '2031-06-30', 1),
+-- driver_id=3：驻虹桥，负责 Hub2 虹桥分拨中心附近末端派送
+(14, '孙芳', '13600136002', 'sunfang@example.com',   '310101199408153456', 2, '1994-08-15',
+ 'SH0003334567890', 'C1', '2032-08-31', 1),
+-- driver_id=4：驻松江，负责 Hub3 松江分拨中心附近末端派送
+(15, '周杰', '13600136003', 'zhoujie@example.com',   '310101199112100987', 1, '1991-12-10',
+ 'SH0004434567890', 'C1', '2030-12-31', 1);
+
+-- 车辆信息（每位司机一辆小型货车，均使用沪牌，适合上海市区末端配送）
+INSERT INTO `vehicle_info`
+  (`driver_id`, `vehicle_type`, `vehicle_brand`, `vehicle_model`, `license_plate`,
+   `load_capacity`, `volume_capacity`, `vehicle_status`)
+VALUES
+(2, '小型货车', '江铃', 'JMC-T5',  '沪C11111', 1.5,  8.0, 1),  -- 赵磊 浦东
+(3, '小型货车', '福田', 'FT-G7',   '沪D22222', 1.5,  8.0, 1),  -- 孙芳 虹桥
+(4, '小型货车', '长安', 'SC1031',  '沪G33333', 2.0, 10.0, 1);  -- 周杰 松江
+
+-- ============================================================
+-- 补充上海收货地址（扩充三个本地Hub覆盖范围）
+-- 原有 8 条；本段新增 10 条，合计 18 条，无重复地址
+-- ============================================================
+
+-- 张三（customer_id=1）补 Hub2 虹桥 / Hub3 松江 各一条
+INSERT INTO `customer_address`
+  (`customer_id`, `receiver_name`, `receiver_phone`,
+   `province`, `city`, `district`, `detail_address`, `postal_code`,
+   `is_default`, `latitude`, `longitude`)
+VALUES
+(1, '张三', '13800138000', '上海市', '上海市', '闵行区',
+ '闵行区虹梅路500号虹梅休闲街',         '201103', 0, 31.1870, 121.3950),
+(1, '张三', '13800138000', '上海市', '上海市', '松江区',
+ '松江区方松街道文汇路200号',            '201615', 0, 31.0450, 121.2550);
+
+-- 李梅（customer_id=2）补 Hub3 松江 一条
+INSERT INTO `customer_address`
+  (`customer_id`, `receiver_name`, `receiver_phone`,
+   `province`, `city`, `district`, `detail_address`, `postal_code`,
+   `is_default`, `latitude`, `longitude`)
+VALUES
+(2, '李梅', '13900139001', '上海市', '上海市', '松江区',
+ '松江区岳阳街道江川路100号',            '201620', 0, 31.0220, 121.2100);
+
+-- 王强（customer_id=3）补 Hub1 浦东 一条
+INSERT INTO `customer_address`
+  (`customer_id`, `receiver_name`, `receiver_phone`,
+   `province`, `city`, `district`, `detail_address`, `postal_code`,
+   `is_default`, `latitude`, `longitude`)
+VALUES
+(3, '王强', '13900139002', '上海市', '上海市', '浦东新区',
+ '浦东新区张江镇博云路100号张江高科',   '201203', 0, 31.2060, 121.6050);
+
+-- 陈静（customer_id=4）补 Hub2 虹桥 一条
+INSERT INTO `customer_address`
+  (`customer_id`, `receiver_name`, `receiver_phone`,
+   `province`, `city`, `district`, `detail_address`, `postal_code`,
+   `is_default`, `latitude`, `longitude`)
+VALUES
+(4, '陈静', '13900139003', '上海市', '上海市', '长宁区',
+ '长宁区虹桥路2000号虹桥国际广场',      '200051', 0, 31.1988, 121.3650);
+
+-- 新增顾客：陆峰（customer_id=5，user_id=16）、林晓（customer_id=6，user_id=17）
+INSERT INTO `user` (`username`, `secret`, `permission`) VALUES
+('customer5', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2),  -- user_id=16
+('customer6', '$2a$10$.ckJuQWWC9dUh0hOa7v4LuxBa6PICggDyUUz7awFv4CM/rh7tQZ0a', 2);  -- user_id=17
+
+INSERT INTO `customer_info` (`user_id`, `real_name`, `phone`, `email`, `gender`, `birthday`, `status`) VALUES
+(16, '陆峰', '13900139004', 'lufeng@example.com',  1, '1990-09-01', 1),  -- customer_id=5
+(17, '林晓', '13900139005', 'linxiao@example.com', 2, '1996-04-22', 1);  -- customer_id=6
+
+-- 陆峰（customer_id=5）：Hub1 浦东花木 + Hub3 松江佘山
+INSERT INTO `customer_address`
+  (`customer_id`, `receiver_name`, `receiver_phone`,
+   `province`, `city`, `district`, `detail_address`, `postal_code`,
+   `is_default`, `latitude`, `longitude`)
+VALUES
+(5, '陆峰', '13900139004', '上海市', '上海市', '浦东新区',
+ '浦东新区花木路50号花木综合市场',      '201204', 1, 31.2160, 121.5780),
+(5, '陆峰', '13900139004', '上海市', '上海市', '松江区',
+ '松江区佘山镇祥和路100号',             '201602', 0, 31.0700, 121.1750);
+
+-- 林晓（customer_id=6）：Hub2 闵行颛桥 + Hub1 浦东三林
+INSERT INTO `customer_address`
+  (`customer_id`, `receiver_name`, `receiver_phone`,
+   `province`, `city`, `district`, `detail_address`, `postal_code`,
+   `is_default`, `latitude`, `longitude`)
+VALUES
+(6, '林晓', '13900139005', '上海市', '上海市', '闵行区',
+ '闵行区颛桥镇颛兴路200号',             '201108', 1, 31.1200, 121.3850),
+(6, '林晓', '13900139005', '上海市', '上海市', '浦东新区',
+ '浦东新区三林镇塘桥路300号',           '200124', 0, 31.1670, 121.5200);

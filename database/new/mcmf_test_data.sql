@@ -11,8 +11,6 @@
 -- =============================================================================
 
 USE `transportation`;
-SET NAMES utf8mb4;
-SET CHARACTER SET utf8mb4;
 
 -- ---------------------------------------------------------------------------
 -- 收货地址（customer_info.id=1 即种子「张三」；与后续手工下单共用同一顾客体系）
@@ -62,6 +60,45 @@ SET @wh_beijing     = 4;
 SET @shop_shanghai  = 1;
 SET @shop_beijing   = 3;
 
+-- 新增：all.sql 末尾补充的外省仓库、商户、上海各Hub附近地址
+SET @wh_guangzhou = 5;   -- 广州番禺履约中心
+SET @wh_nanjing   = 6;   -- 南京江宁履约中心
+SET @wh_hangzhou  = 7;   -- 杭州萧山履约中心
+SET @shop_gz      = 4;   -- 广州南国优选
+SET @shop_nj      = 5;   -- 南京苏货直供
+SET @shop_hz      = 6;   -- 杭州西子精品
+-- Hub1 浦东分拨中心附近（基础）
+SET @addr_sh_pudong_limei       = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 2 AND `district` = '浦东新区' LIMIT 1);
+SET @addr_sh_pudong_chenjing    = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 4 AND `district` = '浦东新区' LIMIT 1);
+-- Hub2 虹桥分拨中心附近（基础）
+SET @addr_sh_minhang_limei      = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 2 AND `district` = '闵行区'   LIMIT 1);
+SET @addr_sh_minhang_wangqiang  = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 3 AND `district` = '闵行区'   LIMIT 1);
+-- Hub3 松江分拨中心附近（基础）
+SET @addr_sh_songjiang_wangqiang= (SELECT `id` FROM `customer_address` WHERE `customer_id` = 3 AND `district` = '松江区'   LIMIT 1);
+SET @addr_sh_songjiang_chenjing = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 4 AND `district` = '松江区'   LIMIT 1);
+-- Hub1 浦东（补充）
+SET @addr_sh_pudong_wangqiang   = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 3 AND `district` = '浦东新区' LIMIT 1);
+SET @addr_sh_pudong_lufeng      = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 5 AND `district` = '浦东新区' LIMIT 1);
+SET @addr_sh_pudong_linxiao     = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 6 AND `district` = '浦东新区' LIMIT 1);
+-- Hub2 虹桥（补充）
+SET @addr_sh_minhang_zhangsan   = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 1 AND `district` = '闵行区'   LIMIT 1);
+SET @addr_sh_changning_chenjing = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 4 AND `district` = '长宁区'   LIMIT 1);
+SET @addr_sh_minhang_linxiao    = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 6 AND `district` = '闵行区'   LIMIT 1);
+-- Hub3 松江（补充）
+SET @addr_sh_songjiang_zhangsan = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 1 AND `district` = '松江区'   LIMIT 1);
+SET @addr_sh_songjiang_limei    = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 2 AND `district` = '松江区'   LIMIT 1);
+SET @addr_sh_songjiang_lufeng   = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 5 AND `district` = '松江区'   LIMIT 1);
+SET @addr_sh_pudong_lufeng      = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 5 AND `district` = '浦东新区' LIMIT 1);
+SET @addr_sh_pudong_linxiao     = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 6 AND `district` = '浦东新区' LIMIT 1);
+-- Hub2 虹桥（补充）
+SET @addr_sh_minhang_zhangsan   = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 1 AND `district` = '闵行区'   LIMIT 1);
+SET @addr_sh_changning_chenjing = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 4 AND `district` = '长宁区'   LIMIT 1);
+SET @addr_sh_minhang_linxiao    = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 6 AND `district` = '闵行区'   LIMIT 1);
+-- Hub3 松江（补充）
+SET @addr_sh_songjiang_zhangsan = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 1 AND `district` = '松江区'   LIMIT 1);
+SET @addr_sh_songjiang_limei    = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 2 AND `district` = '松江区'   LIMIT 1);
+SET @addr_sh_songjiang_lufeng   = (SELECT `id` FROM `customer_address` WHERE `customer_id` = 5 AND `district` = '松江区'   LIMIT 1);
+
 -- ---------------------------------------------------------------------------
 -- 清理旧测试订单及关联的作业记录
 -- ---------------------------------------------------------------------------
@@ -94,13 +131,14 @@ SET @tid = DATE_FORMAT(NOW(), '%Y%m%d%H%i%s');
 
 DROP TEMPORARY TABLE IF EXISTS `_mcmf_orders`;
 CREATE TEMPORARY TABLE `_mcmf_orders` (
-  `seq` INT NOT NULL PRIMARY KEY,
-  `address_id` BIGINT NOT NULL,
-  `warehouse_id` BIGINT NOT NULL,
-  `origin_hub_id` BIGINT NOT NULL,
-  `dest_hub_id` BIGINT NOT NULL,
-  `shop_id` BIGINT NOT NULL,
-  `remark` VARCHAR(120) NOT NULL
+  `seq`           INT           NOT NULL PRIMARY KEY,
+  `customer_id`   BIGINT        NOT NULL DEFAULT 1,
+  `address_id`    BIGINT        NOT NULL,
+  `warehouse_id`  BIGINT        NOT NULL,
+  `origin_hub_id` BIGINT        NOT NULL,
+  `dest_hub_id`   BIGINT        NOT NULL,
+  `shop_id`       BIGINT        NOT NULL,
+  `remark`        VARCHAR(120)  NOT NULL
 );
 
 -- 1～18：沪(3)→京(4)
@@ -131,26 +169,51 @@ INSERT INTO `_mcmf_orders` (`seq`, `address_id`, `warehouse_id`, `origin_hub_id`
 SELECT 52 + n.n, @addr_shenzhen, @wh_shanghai, 3, 8, @shop_shanghai, CONCAT('MCMF批量 沪→深 #', n.n)
 FROM (SELECT 1 AS n UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6) n;
 
--- 59～N：京(4)→沪(3)，京北优品铺 + 北京大兴履约中心
--- 覆盖 all.sql 中所有上海收货地址（city='上海市'）
-SET @seq_bj_sh = 58;
+-- 59～63：京(4)→沪(3)，京北优品铺 + 北京大兴履约中心
 INSERT INTO `_mcmf_orders` (`seq`, `address_id`, `warehouse_id`, `origin_hub_id`, `dest_hub_id`, `shop_id`, `remark`)
-SELECT
-  (@seq_bj_sh := @seq_bj_sh + 1) AS `seq`,
-  a.`id`,
-  @wh_beijing,
-  4,
-  3,
-  @shop_beijing,
-  CONCAT('MCMF批量 京→沪 ', a.`district`, ' ', a.`receiver_name`)
-FROM `customer_address` a
-WHERE a.`city` = '上海市'
-ORDER BY a.`customer_id`, a.`id`;
-
--- 接续上一段：沪→西安(7)（利用武汉/郑州—西安边）
-INSERT INTO `_mcmf_orders` (`seq`, `address_id`, `warehouse_id`, `origin_hub_id`, `dest_hub_id`, `shop_id`, `remark`)
-SELECT (SELECT MAX(`seq`) FROM `_mcmf_orders`) + n.n, @addr_xian, @wh_shanghai, 3, 7, @shop_shanghai, CONCAT('MCMF批量 沪→陕 #', n.n)
+SELECT 58 + n.n, @addr_shanghai, @wh_beijing, 4, 3, @shop_beijing, CONCAT('MCMF批量 京→沪 #', n.n)
 FROM (SELECT 1 AS n UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5) n;
+
+-- 64～68：沪→西安(7)（利用武汉/郑州—西安边）
+INSERT INTO `_mcmf_orders` (`seq`, `address_id`, `warehouse_id`, `origin_hub_id`, `dest_hub_id`, `shop_id`, `remark`)
+SELECT 63 + n.n, @addr_xian, @wh_shanghai, 3, 7, @shop_shanghai, CONCAT('MCMF批量 沪→陕 #', n.n)
+FROM (SELECT 1 AS n UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5) n;
+
+-- ── 外省→沪：每笔订单对应不同收货地址，覆盖三Hub，便于末端VRP路由演示 ──
+-- seq 69-76：广州(5)→沪，8笔，地址分散到三Hub
+INSERT INTO `_mcmf_orders` (`seq`, `customer_id`, `address_id`, `warehouse_id`, `origin_hub_id`, `dest_hub_id`, `shop_id`, `remark`)
+VALUES
+(69, 2, @addr_sh_pudong_limei,        @wh_guangzhou, 5, 3, @shop_gz, 'MCMF批量 穗→沪 浦东唐镇 李梅'),
+(70, 3, @addr_sh_minhang_wangqiang,   @wh_guangzhou, 5, 3, @shop_gz, 'MCMF批量 穗→沪 闵行七宝 王强'),
+(71, 4, @addr_sh_songjiang_chenjing,  @wh_guangzhou, 5, 3, @shop_gz, 'MCMF批量 穗→沪 松江新城 陈静'),
+(72, 4, @addr_sh_pudong_chenjing,     @wh_guangzhou, 5, 3, @shop_gz, 'MCMF批量 穗→沪 浦东金桥 陈静'),
+(73, 2, @addr_sh_minhang_limei,       @wh_guangzhou, 5, 3, @shop_gz, 'MCMF批量 穗→沪 闵行申虹 李梅'),
+(74, 3, @addr_sh_songjiang_wangqiang, @wh_guangzhou, 5, 3, @shop_gz, 'MCMF批量 穗→沪 松江九亭 王强'),
+(75, 5, @addr_sh_pudong_lufeng,       @wh_guangzhou, 5, 3, @shop_gz, 'MCMF批量 穗→沪 浦东花木 陆峰'),
+(76, 6, @addr_sh_minhang_linxiao,     @wh_guangzhou, 5, 3, @shop_gz, 'MCMF批量 穗→沪 闵行颛桥 林晓');
+
+-- seq 77-84：南京(9)→沪，8笔
+INSERT INTO `_mcmf_orders` (`seq`, `customer_id`, `address_id`, `warehouse_id`, `origin_hub_id`, `dest_hub_id`, `shop_id`, `remark`)
+VALUES
+(77, 1, @addr_sh_minhang_zhangsan,   @wh_nanjing, 9, 3, @shop_nj, 'MCMF批量 宁→沪 闵行虹梅 张三'),
+(78, 1, @addr_sh_songjiang_zhangsan, @wh_nanjing, 9, 3, @shop_nj, 'MCMF批量 宁→沪 松江方松 张三'),
+(79, 2, @addr_sh_songjiang_limei,    @wh_nanjing, 9, 3, @shop_nj, 'MCMF批量 宁→沪 松江岳阳 李梅'),
+(80, 3, @addr_sh_pudong_wangqiang,   @wh_nanjing, 9, 3, @shop_nj, 'MCMF批量 宁→沪 浦东张江 王强'),
+(81, 4, @addr_sh_changning_chenjing, @wh_nanjing, 9, 3, @shop_nj, 'MCMF批量 宁→沪 长宁虹桥 陈静'),
+(82, 5, @addr_sh_songjiang_lufeng,   @wh_nanjing, 9, 3, @shop_nj, 'MCMF批量 宁→沪 松江佘山 陆峰'),
+(83, 6, @addr_sh_pudong_linxiao,     @wh_nanjing, 9, 3, @shop_nj, 'MCMF批量 宁→沪 浦东三林 林晓'),
+(84, 1, @addr_shanghai,              @wh_nanjing, 9, 3, @shop_nj, 'MCMF批量 宁→沪 浦东陆家嘴 张三');
+
+-- seq 85-91：杭州(12)→沪，7笔
+INSERT INTO `_mcmf_orders` (`seq`, `customer_id`, `address_id`, `warehouse_id`, `origin_hub_id`, `dest_hub_id`, `shop_id`, `remark`)
+VALUES
+(85, 2, @addr_sh_pudong_limei,        @wh_hangzhou, 12, 3, @shop_hz, 'MCMF批量 杭→沪 浦东唐镇 李梅'),
+(86, 3, @addr_sh_minhang_wangqiang,   @wh_hangzhou, 12, 3, @shop_hz, 'MCMF批量 杭→沪 闵行七宝 王强'),
+(87, 4, @addr_sh_songjiang_chenjing,  @wh_hangzhou, 12, 3, @shop_hz, 'MCMF批量 杭→沪 松江新城 陈静'),
+(88, 5, @addr_sh_pudong_lufeng,       @wh_hangzhou, 12, 3, @shop_hz, 'MCMF批量 杭→沪 浦东花木 陆峰'),
+(89, 6, @addr_sh_minhang_linxiao,     @wh_hangzhou, 12, 3, @shop_hz, 'MCMF批量 杭→沪 闵行颛桥 林晓'),
+(90, 3, @addr_sh_songjiang_wangqiang, @wh_hangzhou, 12, 3, @shop_hz, 'MCMF批量 杭→沪 松江九亭 王强'),
+(91, 4, @addr_sh_pudong_chenjing,     @wh_hangzhou, 12, 3, @shop_hz, 'MCMF批量 杭→沪 浦东金桥 陈静');
 
 INSERT INTO `order_info`
   (`order_no`, `customer_id`, `shop_id`, `address_id`, `warehouse_id`,
@@ -160,7 +223,7 @@ INSERT INTO `order_info`
    `remark`, `customer_deleted`, `create_time`)
 SELECT
   CONCAT('MCMF-TEST-', @tid, '-', LPAD(m.`seq`, 3, '0')),
-  1,
+  m.`customer_id`,
   m.`shop_id`,
   m.`address_id`,
   m.`warehouse_id`,
@@ -211,7 +274,7 @@ SELECT
   0
 FROM `order_info` o
 JOIN `customer_address` a ON o.`address_id` = a.`id`
-WHERE o.`order_no` LIKE CONCAT('MCMF-TEST-', @tid, '-%') COLLATE utf8mb4_unicode_ci;
+WHERE o.`order_no` LIKE CONCAT('MCMF-TEST-', @tid, '-%');
 
 INSERT INTO `order_item` (`order_id`, `product_id`, `product_name`, `product_image`, `product_price`, `quantity`, `subtotal`)
 SELECT
@@ -224,15 +287,15 @@ SELECT
   p.`price`
 FROM `order_info` o
 JOIN `product_info` p ON p.`id` = IF(o.`shop_id` = @shop_beijing, 6, 2)
-WHERE o.`order_no` LIKE CONCAT('MCMF-TEST-', @tid, '-%') COLLATE utf8mb4_unicode_ci;
+WHERE o.`order_no` LIKE CONCAT('MCMF-TEST-', @tid, '-%');
 
 SELECT CONCAT(
   'MCMF: inserted ',
-  (SELECT COUNT(*) FROM `order_info` WHERE `order_no` LIKE CONCAT('MCMF-TEST-', @tid, '-%') COLLATE utf8mb4_unicode_ci),
+  (SELECT COUNT(*) FROM `order_info` WHERE `order_no` LIKE CONCAT('MCMF-TEST-', @tid, '-%')),
   ' orders, ',
   (SELECT COUNT(*) FROM `dispatch_pool` dp
      INNER JOIN `order_info` o ON dp.`order_id` = o.`id`
-     WHERE o.`order_no` LIKE CONCAT('MCMF-TEST-', @tid, '-%') COLLATE utf8mb4_unicode_ci),
+     WHERE o.`order_no` LIKE CONCAT('MCMF-TEST-', @tid, '-%')),
   ' dispatch_pool entries (status=0 揽收中).',
   ' Shanghai shop=', @shop_shanghai, ' WH=', @wh_shanghai,
   '; Beijing shop=', @shop_beijing, ' WH=', @wh_beijing, ' (进京有机果汁 id=6).',
